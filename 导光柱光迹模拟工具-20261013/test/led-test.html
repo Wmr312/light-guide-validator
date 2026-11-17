@@ -1,0 +1,668 @@
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>LED 灯珠组件 — 单元测试</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #F8FAFC; color: #0A1628; margin: 0; padding: 32px; }
+  h1 { font-size: 20px; margin: 0 0 20px; }
+  .result { padding: 10px 16px; margin: 6px 0; border-radius: 8px; border: 1px solid #E2E8F0; background: #fff; }
+  .pass { border-left: 4px solid #22c55e; }
+  .fail { border-left: 4px solid #ef4444; }
+  .label { font-weight: 700; font-size: 14px; }
+  .detail { font-size: 12px; color: #64748B; margin-top: 4px; font-family: monospace; }
+</style>
+</head>
+<body>
+<h1>LED 灯珠组件单元测试</h1>
+<div id="results"></div>
+
+<!-- 被测代码 -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/controls/OrbitControls.js"></script>
+<script src="../js/geometry.js?v=7"></script>
+<script src="../js/engine/raytracer.js?v=7"></script>
+<script src="../js/viewer.js?v=7"></script>
+
+<script>
+(function () {
+  'use strict';
+  var results = [];
+
+  function assert(name, cond, detail) {
+    results.push({ name: name, pass: !!cond, detail: detail || '' });
+  }
+  function fmt(v, d) { return Number(v).toFixed(d == null ? 4 : d); }
+
+  // ============================================================
+  // 准备：构建 Ø3×30 圆柱几何，挂载 Viewer
+  //   xform: cx=0, cy=0, cz=15, scale=4/30≈0.13333
+  //   入射端 z=0(mm) → 显示 z=(0-15)*0.13333=-2.0
+  // ============================================================
+  var built = LG.Geometry.build({
+    shape: 'cylinder', d1: 3, d2: 3, length: 30, radialSeg: 24,
+    teeth: { enabled: false, step: 1, width: 0.8, aStart: 85, aEnd: 10, offset: 2 },
+    fileName: ''
+  });
+
+  var slot = document.createElement('div');
+  slot.style.cssText = 'width:600px;height:400px;position:fixed;left:-9999px';
+  document.body.appendChild(slot);
+  LG.Viewer.mount(slot);
+  LG.Viewer.setGeometryData(built.positions, built.indices, 'test');
+
+  var xf = LG.Viewer._xform();
+  var scale = xf.scale;
+  // 入射端在显示空间的 Z 坐标
+  var inputZ = (0 - xf.cz) * scale;   // = -2.0
+
+  // 辅助：计算 LED group 在显示空间的包围盒
+  function ledBounds() {
+    var led = LG.Viewer._ledMesh();
+    if (!led) return null;
+    var box = new THREE.Box3().setFromObject(led);
+    return {
+      min: [box.min.x, box.min.y, box.min.z],
+      max: [box.max.x, box.max.y, box.max.z],
+      childCount: led.children.length,
+      group: led
+    };
+  }
+
+  // ============================================================
+  // T1: LED 禁用时无 mesh
+  // ============================================================
+  LG.Viewer.setLED({ enabled: false, type: 'rectangle', length: 3, width: 2, height: 1.5, gap: 0.5 });
+  assert('T1: LED 禁用时 _ledMesh() === null', LG.Viewer._ledMesh() === null);
+
+  // ============================================================
+  // T2: 启用矩形 LED → Group 存在，子 mesh ≥ 1
+  // ============================================================
+  LG.Viewer.setLED({ enabled: true, type: 'rectangle', length: 3, width: 2, height: 1.5, gap: 0.5 });
+  var led = LG.Viewer._ledMesh();
+  assert('T2: 启用矩形 LED → mesh 存在', led !== null);
+  assert('T2: LED mesh 是 THREE.Group', led && led.isGroup, 'type=' + (led ? led.type : 'null'));
+  assert('T2: 矩形 LED 至少有 1 个子 mesh', led && led.children.length >= 1,
+    'children=' + (led ? led.children.length : 0));
+
+  // ============================================================
+  // T3: LED group scale = xform scale
+  // ============================================================
+  assert('T3: LED group.scale = xform.scale', led && Math.abs(led.scale.x - scale) < 0.001,
+    'group.scale=' + (led ? fmt(led.scale.x) : 'null') + ' xform.scale=' + fmt(scale));
+
+  // ============================================================
+  // T4: LED group position = xform 平移 (-cx*scale, -cy*scale, -cz*scale)
+  // ============================================================
+  var expPX = -xf.cx * scale, expPY = -xf.cy * scale, expPZ = -xf.cz * scale;
+  assert('T4: LED group.position = (-cx*scale, -cy*scale, -cz*scale)',
+    led && Math.abs(led.position.x - expPX) < 0.001 &&
+    Math.abs(led.position.y - expPY) < 0.001 &&
+    Math.abs(led.position.z - expPZ) < 0.001,
+    'pos=[' + (led ? [led.position.x, led.position.y, led.position.z].map(fmt).join(',') : 'null') + '] ' +
+    'exp=[' + [expPX, expPY, expPZ].map(fmt).join(',') + ']');
+
+  // ============================================================
+  // T5: 矩形 LED 位于入射端前方 (Z < inputZ)
+  //   gap=0.5: 发光面 z=-0.5(mm) → 显示 z=(-0.5-15)*0.13333≈-2.0667
+  //   背面 z=-2.0(mm) → 显示 z=(-2.0-15)*0.13333≈-2.2667
+  //   要求 max.z < inputZ (-2.0)
+  // ============================================================
+  var b5 = ledBounds();
+  assert('T5: 矩形 LED max.z < 入射端 Z (在入射端前方)',
+    b5 && b5.max[2] < inputZ + 0.001,
+    'led.max.z=' + (b5 ? fmt(b5.max[2]) : 'null') + ' inputZ=' + fmt(inputZ));
+
+  // ============================================================
+  // T6: 矩形 LED 包围盒跨度验证
+  //   L=3(mm) → X 跨度 = 3*scale ≈ 0.4
+  //   W=2(mm) → Y 跨度 = 2*scale ≈ 0.2667
+  //   H=1.5(mm) → Z 跨度 = 1.5*scale ≈ 0.2
+  // ============================================================
+  var xSpan = b5.max[0] - b5.min[0];
+  var ySpan = b5.max[1] - b5.min[1];
+  var zSpan = b5.max[2] - b5.min[2];
+  assert('T6: X 跨度 = L×scale', Math.abs(xSpan - 3 * scale) < 0.01,
+    'xSpan=' + fmt(xSpan) + ' exp=' + fmt(3 * scale));
+  assert('T6: Y 跨度 = W×scale', Math.abs(ySpan - 2 * scale) < 0.01,
+    'ySpan=' + fmt(ySpan) + ' exp=' + fmt(2 * scale));
+  assert('T6: Z 跨度 = H×scale', Math.abs(zSpan - 1.5 * scale) < 0.01,
+    'zSpan=' + fmt(zSpan) + ' exp=' + fmt(1.5 * scale));
+
+  // ============================================================
+  // T7: gap 增大 → LED 远离入射端 (max.z 减小)
+  //   gap=0.5 → max.z ≈ -2.0667
+  //   gap=2.0 → max.z ≈ -2.2667
+  //   差值 = (2.0-0.5)*scale = 0.2
+  // ============================================================
+  var maxZ_gap05 = b5.max[2];
+  LG.Viewer.setLED({ enabled: true, type: 'rectangle', length: 3, width: 2, height: 1.5, gap: 2.0 });
+  var b7 = ledBounds();
+  var maxZ_gap20 = b7.max[2];
+  assert('T7: gap 增大后 LED max.z 减小 (远离入射端)', maxZ_gap20 < maxZ_gap05,
+    'gap0.5=' + fmt(maxZ_gap05) + ' gap2.0=' + fmt(maxZ_gap20));
+  var deltaZ = maxZ_gap05 - maxZ_gap20;
+  var expDelta = (2.0 - 0.5) * scale;
+  assert('T7: ΔZ = Δgap × scale', Math.abs(deltaZ - expDelta) < 0.001,
+    'deltaZ=' + fmt(deltaZ) + ' exp=' + fmt(expDelta));
+
+  // ============================================================
+  // T8: 正方形 LED → X 跨度 = Y 跨度
+  //   L=W=4 → X span = Y span = 4*scale
+  // ============================================================
+  LG.Viewer.setLED({ enabled: true, type: 'square', length: 4, width: 4, height: 1.5, gap: 0.5 });
+  var b8 = ledBounds();
+  var xSpan8 = b8.max[0] - b8.min[0];
+  var ySpan8 = b8.max[1] - b8.min[1];
+  assert('T8: 正方形 LED X 跨度 = Y 跨度', Math.abs(xSpan8 - ySpan8) < 0.001,
+    'xSpan=' + fmt(xSpan8) + ' ySpan=' + fmt(ySpan8));
+  assert('T8: 正方形 LED 跨度 = 4×scale', Math.abs(xSpan8 - 4 * scale) < 0.01,
+    'span=' + fmt(xSpan8) + ' exp=' + fmt(4 * scale));
+
+  // ============================================================
+  // T9: 凹面 LED → 子部件 ≥ 2（圆柱 + 球冠 + 底盖 = 3）
+  // ============================================================
+  LG.Viewer.setLED({ enabled: true, type: 'concave', length: 3, width: 3, height: 2, gap: 0.5, concaveDepth: 0.4 });
+  var b9 = ledBounds();
+  assert('T9: 凹面 LED 子部件 ≥ 2', b9 && b9.childCount >= 2,
+    'children=' + (b9 ? b9.childCount : 0));
+  assert('T9: 凹面 LED 位于入射端前方', b9 && b9.max[2] < inputZ + 0.001,
+    'max.z=' + (b9 ? fmt(b9.max[2]) : 'null') + ' inputZ=' + fmt(inputZ));
+
+  // ============================================================
+  // T10: 凸面 LED → 子部件 ≥ 2
+  // ============================================================
+  LG.Viewer.setLED({ enabled: true, type: 'convex', length: 3, width: 3, height: 2, gap: 0.5, convexRadius: 0.6 });
+  var b10 = ledBounds();
+  assert('T10: 凸面 LED 子部件 ≥ 2', b10 && b10.childCount >= 2,
+    'children=' + (b10 ? b10.childCount : 0));
+  assert('T10: 凸面 LED 位于入射端前方', b10 && b10.max[2] < inputZ + 0.001,
+    'max.z=' + (b10 ? fmt(b10.max[2]) : 'null') + ' inputZ=' + fmt(inputZ));
+
+  // ============================================================
+  // T11: 类型切换 → 新 mesh 对象（旧 mesh 被释放）
+  // ============================================================
+  var ledBefore = LG.Viewer._ledMesh();
+  LG.Viewer.setLED({ enabled: true, type: 'rectangle', length: 5, width: 3, height: 2, gap: 1.0 });
+  var ledAfter = LG.Viewer._ledMesh();
+  assert('T11: 类型切换后 LED mesh 是新对象', ledBefore !== ledAfter,
+    'before=' + (ledBefore ? ledBefore.uuid.slice(0, 8) : 'null') +
+    ' after=' + (ledAfter ? ledAfter.uuid.slice(0, 8) : 'null'));
+
+  // ============================================================
+  // T12: clearLED → _ledMesh() === null
+  // ============================================================
+  LG.Viewer.clearLED();
+  assert('T12: clearLED 后 _ledMesh() === null', LG.Viewer._ledMesh() === null);
+
+  // ============================================================
+  // T13: setGeometryData 后 LED 自动重建（applyLED 被调用）
+  // ============================================================
+  LG.Viewer.setLED({ enabled: true, type: 'rectangle', length: 3, width: 2, height: 1.5, gap: 0.5 });
+  var ledBeforeRebuild = LG.Viewer._ledMesh();
+  LG.Viewer.setGeometryData(built.positions, built.indices, 'test2');
+  var ledAfterRebuild = LG.Viewer._ledMesh();
+  assert('T13: setGeometryData 后 LED 仍存在', ledAfterRebuild !== null);
+  assert('T13: setGeometryData 后 LED 被重建 (新对象)', ledAfterRebuild !== ledBeforeRebuild,
+    'before=' + (ledBeforeRebuild ? ledBeforeRebuild.uuid.slice(0, 8) : 'null') +
+    ' after=' + (ledAfterRebuild ? ledAfterRebuild.uuid.slice(0, 8) : 'null'));
+
+  // ============================================================
+  // T14: 极端参数钳制 → mesh 仍可正常生成
+  //   L=0, W=0, H=0, gap=-1 → 钳制为最小值
+  // ============================================================
+  LG.Viewer.setLED({ enabled: true, type: 'rectangle', length: 0, width: 0, height: 0, gap: -1 });
+  var b14 = ledBounds();
+  assert('T14: 极端参数钳制后 mesh 存在', b14 !== null);
+  assert('T14: 钳制后 LED 尺寸 > 0',
+    b14 && (b14.max[0] - b14.min[0]) > 0 &&
+    (b14.max[1] - b14.min[1]) > 0 &&
+    (b14.max[2] - b14.min[2]) > 0,
+    'xSpan=' + (b14 ? fmt(b14.max[0] - b14.min[0]) : 'null') +
+    ' ySpan=' + (b14 ? fmt(b14.max[1] - b14.min[1]) : 'null') +
+    ' zSpan=' + (b14 ? fmt(b14.max[2] - b14.min[2]) : 'null'));
+
+  // ============================================================
+  // T15: gap=0 → LED 发光面紧贴入射端
+  //   max.z ≈ inputZ (≈ -2.0)
+  // ============================================================
+  LG.Viewer.setLED({ enabled: true, type: 'rectangle', length: 3, width: 2, height: 1.5, gap: 0 });
+  var b15 = ledBounds();
+  assert('T15: gap=0 时 LED max.z ≈ 入射端 Z', b15 && Math.abs(b15.max[2] - inputZ) < 0.01,
+    'max.z=' + (b15 ? fmt(b15.max[2]) : 'null') + ' inputZ=' + fmt(inputZ));
+
+  // ============================================================
+  // T16: 凹面 LED Z 跨度 = H×scale（含凹面深度）
+  //   H=2, concaveDepth=0.4 → 总 Z 跨度 = 2×scale
+  // ============================================================
+  LG.Viewer.setLED({ enabled: true, type: 'concave', length: 3, width: 3, height: 2, gap: 0.5, concaveDepth: 0.4 });
+  var b16 = ledBounds();
+  var zSpan16 = b16.max[2] - b16.min[2];
+  assert('T16: 凹面 LED Z 跨度 = H×scale', Math.abs(zSpan16 - 2 * scale) < 0.01,
+    'zSpan=' + fmt(zSpan16) + ' exp=' + fmt(2 * scale));
+
+  // ============================================================
+  // T17: 凸面 LED Z 跨度 = H×scale
+  //   H=2, convexRadius=0.6 → dome height ≈ 0.6-sqrt(0.36-2.25)<0 → hemisphere
+  //   总 Z 跨度 = H×scale
+  // ============================================================
+  LG.Viewer.setLED({ enabled: true, type: 'convex', length: 3, width: 3, height: 2, gap: 0.5, convexRadius: 0.6 });
+  var b17 = ledBounds();
+  var zSpan17 = b17.max[2] - b17.min[2];
+  assert('T17: 凸面 LED Z 跨度 = H×scale', Math.abs(zSpan17 - 2 * scale) < 0.02,
+    'zSpan=' + fmt(zSpan17) + ' exp=' + fmt(2 * scale));
+
+  // ============================================================
+  // T18: 禁用 LED → mesh 消失
+  // ============================================================
+  LG.Viewer.setLED({ enabled: false, type: 'rectangle', length: 3, width: 2, height: 1.5, gap: 0.5 });
+  assert('T18: 禁用 LED 后 _ledMesh() === null', LG.Viewer._ledMesh() === null);
+
+  // ============================================================
+  // 引擎级：LED 发光面光线发射（mm 空间，导光柱入射端面 z=0）
+  // 共用：用 autoEndCaps 取端面 id，构造带 LED 的 RayTracer
+  // ============================================================
+  var caps = LG.Viewer.autoEndCaps();
+  function mkTracer(led, extra) {
+    var opts = {
+      n: 1.49, alpha: 0, numRays: 200, maxBounces: 30,
+      inputFaceIds: caps.input, outputFaceIds: caps.output,
+      emissionMode: 'lambert', angleSigma: 12, led: led
+    };
+    if (extra) for (var k in extra) opts[k] = extra[k];
+    return new RayTracer({ positions: built.positions, indices: built.indices }, opts);
+  }
+  // 光线生成时起点沿方向有 0.001*gridSize(=0.03mm) 偏移，断言容差取 0.05
+  var OFF = 0.05;
+
+  // ============================================================
+  // T19: 矩形 LED → 光线从 z=-gap 发光面发出，方向朝 +Z 半球
+  // ============================================================
+  var ledRect = { enabled: true, type: 'rectangle', length: 3, width: 2, height: 1.5, gap: 0.5 };
+  var rt19 = mkTracer(ledRect);
+  var rays19 = rt19._generateRays();
+  var okO19 = true, okD19 = true, okIn19 = true, distinct19 = {};
+  for (var i19 = 0; i19 < rays19.length; i19++) {
+    var o19 = rays19[i19].origin, d19 = rays19[i19].dir;
+    if (Math.abs(o19.z - (-0.5)) > OFF) okO19 = false;                       // 发光面 z=-gap
+    if (Math.abs(o19.x) > 1.5 + OFF || Math.abs(o19.y) > 1.0 + OFF) okO19 = false; // L×W 范围内
+    if (d19.z <= 0) okD19 = false;                                           // 朗伯绕 +Z → dir.z>0
+    if (rays19[i19].inside !== false) okIn19 = false;                        // 起始于空气
+    distinct19[o19.x.toFixed(3) + ',' + o19.y.toFixed(3)] = 1;
+  }
+  assert('T19: 矩形 LED 生成 ' + 200 + ' 条光线', rays19.length === 200, 'n=' + rays19.length);
+  assert('T19: 起点位于 z=-gap 发光面且限于 L×W 内', okO19);
+  assert('T19: 方向全部朝 +Z 半球（朗伯绕法线）', okD19);
+  assert('T19: 光线标记 inside=false（起始于空气）', okIn19);
+  assert('T19: 起点在发光面上分散采样', Object.keys(distinct19).length > 150,
+    'distinct=' + Object.keys(distinct19).length);
+
+  // ============================================================
+  // T20: 凸面 LED → 起点在球冠面上（|P-C|=domeR），法线径向朝外
+  //   W=3 → r=1.5, domeR=max(0.6,1.5)=1.5 → 半球, domeH=1.5
+  //   C=(0,0,-gap-domeR)=-2.0, z∈[-gap-domeH, -gap]=[-2.0,-0.5]
+  // ============================================================
+  var ledConv = { enabled: true, type: 'convex', length: 3, width: 3, height: 2, gap: 0.5, convexRadius: 0.6 };
+  var rt20 = mkTracer(ledConv);
+  var rays20 = rt20._generateRays();
+  var domeR20 = 1.5, cz20 = -2.0;
+  var okS20 = true, okZ20 = true, meanDz20 = 0;
+  for (var i20 = 0; i20 < rays20.length; i20++) {
+    var o20 = rays20[i20].origin;
+    var dist20 = Math.sqrt(o20.x * o20.x + o20.y * o20.y + (o20.z - cz20) * (o20.z - cz20));
+    if (Math.abs(dist20 - domeR20) > OFF + 0.031) okS20 = false;             // 球面(含沿向偏移)
+    if (o20.z < -2.0 - OFF - 0.031 || o20.z > -0.5 + OFF + 0.031) okZ20 = false; // 球冠 z 区间
+    meanDz20 += rays20[i20].dir.z;
+  }
+  meanDz20 /= rays20.length;
+  assert('T20: 凸面 LED 起点在球冠面上 (|P-C|≈domeR=1.5)', okS20);
+  assert('T20: 起点 z 落在球冠区间 [-2.0,-0.5]', okZ20);
+  assert('T20: 平均方向朝 +Z（曲面法线半球内）', meanDz20 > 0.25, 'mean dir.z=' + fmt(meanDz20, 3));
+
+  // ============================================================
+  // T21: 凹面 LED → 起点在球碗面上（|P-C|=R），法线指向球心
+  //   W=3 → r=1.5, d=0.4, R=(2.25+0.16)/0.8=3.0125
+  //   C=(0,0,-gap-d+R)=2.1125, z∈[-gap-d, -gap]=[-0.9,-0.5]
+  // ============================================================
+  var ledConc = { enabled: true, type: 'concave', length: 3, width: 3, height: 2, gap: 0.5, concaveDepth: 0.4 };
+  var rt21 = mkTracer(ledConc);
+  var rays21 = rt21._generateRays();
+  var R21 = 3.0125, cz21 = 2.1125;
+  var okS21 = true, okZ21 = true, meanDz21 = 0;
+  for (var i21 = 0; i21 < rays21.length; i21++) {
+    var o21 = rays21[i21].origin;
+    var dist21 = Math.sqrt(o21.x * o21.x + o21.y * o21.y + (o21.z - cz21) * (o21.z - cz21));
+    if (Math.abs(dist21 - R21) > OFF + 0.031) okS21 = false;
+    if (o21.z < -0.9 - OFF - 0.031 || o21.z > -0.5 + OFF + 0.031) okZ21 = false;
+    meanDz21 += rays21[i21].dir.z;
+  }
+  meanDz21 /= rays21.length;
+  assert('T21: 凹面 LED 起点在球碗面上 (|P-C|≈R=3.0125)', okS21);
+  assert('T21: 起点 z 落在碗深区间 [-0.9,-0.5]', okZ21);
+  assert('T21: 平均方向朝 +Z（碗口出光）', meanDz21 > 0.5, 'mean dir.z=' + fmt(meanDz21, 3));
+
+  // ============================================================
+  // T22: LED 端到端仿真 → 能量守恒，且存在"灯珠→入射端"的空中段
+  // ============================================================
+  var rt22 = mkTracer(ledRect, { numRays: 300 });
+  var res22 = rt22.simulate();
+  var ledgerSum22 = res22.ledger.output + res22.ledger.side + res22.ledger.absorbed + res22.ledger.residual;
+  var ledgerPct22 = res22.total > 0 ? ledgerSum22 / res22.total * 100 : 0;
+  var airSeg22 = false;
+  for (var i22 = 0; i22 < res22.segments.length; i22++) {
+    var sg22 = res22.segments[i22];
+    if (sg22.type === 'escape' && sg22.start[2] < -0.4 && sg22.end[2] > -0.1) { airSeg22 = true; break; }
+  }
+  assert('T22: LED 仿真能量账本守恒 ≥99%', ledgerPct22 >= 99 && ledgerPct22 <= 101,
+    'ledger=' + fmt(ledgerPct22, 1) + '%');
+  assert('T22: 统计计数闭合 success+escaped+exhausted=total',
+    res22.success + res22.escaped + res22.exhausted === res22.total);
+  assert('T22: 存在灯珠→入射端的空中飞行段 (z:-0.5→0)', airSeg22);
+  assert('T22: 有光线进入导光柱并成功出射 (success>0)', res22.success > 0,
+    'success=' + res22.success + '/' + res22.total);
+
+  // ============================================================
+  // T23: LED 关闭 → 回退默认端面光源（起点在入射端面 z≈0 侧）
+  // ============================================================
+  var rt23 = mkTracer({ enabled: false, type: 'rectangle', length: 3, width: 2, height: 1.5, gap: 0.5 });
+  var rays23 = rt23._generateRays();
+  var okZ23 = true;
+  for (var i23 = 0; i23 < rays23.length; i23++) {
+    if (rays23[i23].origin.z < -0.01 || rays23[i23].origin.z > 1.0) okZ23 = false;
+  }
+  assert('T23: LED 关闭时光线起点在入射端面 (z≈0, 非灯珠位置)', okZ23 && rays23.length > 0,
+    'n=' + rays23.length);
+
+  // ============================================================
+  // T24: 高斯模式 LED → 方向收敛在法线附近（小角度抖动）
+  // ============================================================
+  var rt24 = mkTracer(ledRect, { emissionMode: 'gauss', angleSigma: 12 });
+  var rays24 = rt24._generateRays();
+  var meanDz24 = 0;
+  for (var i24 = 0; i24 < rays24.length; i24++) meanDz24 += rays24[i24].dir.z;
+  meanDz24 /= rays24.length;
+  assert('T24: 高斯模式 LED 平均方向接近 +Z 法线 (mean dir.z>0.95)', meanDz24 > 0.95,
+    'mean dir.z=' + fmt(meanDz24, 3));
+
+  // ============================================================
+  // 场景二：手动导入模型（远离原点、轴向 X 的长方体）
+  //   box: center=(10,5,25), size 8×6×20 → x∈[6,14] y∈[2,8] z∈[15,35]
+  //   入射面 = x=6 端面（tri ids 4,5，外法向 -X），出射面 = x=14（ids 6,7）
+  // ============================================================
+  var boxPos = new Float32Array([
+    6,2,15,  14,2,15, 14,8,15,  6,8,15,     // v0..v3  z=15
+    6,2,35,  14,2,35, 14,8,35,  6,8,35      // v4..v7  z=35
+  ]);
+  var boxIdx = new Uint32Array([
+    0,3,2,  0,2,1,      // z=15  (-Z)  ids 0,1
+    4,5,6,  4,6,7,      // z=35  (+Z)  ids 2,3
+    0,4,7,  0,7,3,      // x=6   (-X)  ids 4,5  ← 入射面
+    1,2,6,  1,6,5,      // x=14  (+X)  ids 6,7  ← 出射面
+    0,1,5,  0,5,4,      // y=2   (-Y)  ids 8,9
+    3,7,6,  3,6,2       // y=8   (+Y)  ids 10,11
+  ]);
+  var boxInput = [4, 5], boxOutput = [6, 7];
+
+  function mkBoxTracer(led, extra) {
+    var opts = {
+      n: 1.49, alpha: 0, numRays: 200, maxBounces: 30,
+      inputFaceIds: boxInput, outputFaceIds: boxOutput,
+      emissionMode: 'lambert', angleSigma: 12, led: led
+    };
+    if (extra) for (var k in extra) opts[k] = extra[k];
+    return new RayTracer({ positions: boxPos, indices: boxIdx }, opts);
+  }
+
+  // ============================================================
+  // T25: computeLEDPose → pos=入射面中心, z=指向体内法向 (+X)
+  //   面心=(6,5,25)；外法向 -X → 局部 +Z=入射方向=+X
+  //   up=(0,1,0) → x=up×z=(0,0,-1), y=z×x=(0,1,0)
+  // ============================================================
+  var pose25 = RayTracer.computeLEDPose(boxPos, boxIdx, boxInput);
+  function near3(a, b, tol) {
+    return a && Math.abs(a[0] - b[0]) < tol && Math.abs(a[1] - b[1]) < tol && Math.abs(a[2] - b[2]) < tol;
+  }
+  assert('T25: 位姿存在', pose25 != null);
+  assert('T25: pos = 入射面中心 (6,5,25)', near3(pose25 && pose25.pos, [6, 5, 25], 1e-6),
+    'pos=' + JSON.stringify(pose25 && pose25.pos));
+  assert('T25: z 轴 = 指向体内法向 (+X)', near3(pose25 && pose25.z, [1, 0, 0], 1e-6),
+    'z=' + JSON.stringify(pose25 && pose25.z));
+  assert('T25: x 轴 = (0,0,-1)', near3(pose25 && pose25.x, [0, 0, -1], 1e-6),
+    'x=' + JSON.stringify(pose25 && pose25.x));
+  assert('T25: y 轴 = (0,1,0)', near3(pose25 && pose25.y, [0, 1, 0], 1e-6),
+    'y=' + JSON.stringify(pose25 && pose25.y));
+
+  // ============================================================
+  // T26: 位姿正交归一且右手系（|x|=|y|=|z|=1, x×y=z）
+  // ============================================================
+  function vlen(v) { return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
+  function vdot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+  function vcross(a, b) {
+    return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  }
+  var orthonormal26 =
+    Math.abs(vlen(pose25.x) - 1) < 1e-6 && Math.abs(vlen(pose25.y) - 1) < 1e-6 &&
+    Math.abs(vlen(pose25.z) - 1) < 1e-6 &&
+    Math.abs(vdot(pose25.x, pose25.y)) < 1e-6 && Math.abs(vdot(pose25.x, pose25.z)) < 1e-6 &&
+    Math.abs(vdot(pose25.y, pose25.z)) < 1e-6;
+  assert('T26: 基向量单位正交', orthonormal26);
+  var cxy = vcross(pose25.x, pose25.y);
+  assert('T26: 右手系 x×y=z', near3(cxy, pose25.z, 1e-6), 'x×y=' + JSON.stringify(cxy));
+
+  // ============================================================
+  // T27: 反转三角绕向（法向翻转的 STL）→ 探针自动纠正朝向，位姿不变
+  // ============================================================
+  var boxIdxFlip = new Uint32Array(boxIdx.length);
+  for (var f27 = 0; f27 < boxIdx.length / 3; f27++) {
+    boxIdxFlip[f27 * 3] = boxIdx[f27 * 3];
+    boxIdxFlip[f27 * 3 + 1] = boxIdx[f27 * 3 + 2];
+    boxIdxFlip[f27 * 3 + 2] = boxIdx[f27 * 3 + 1];
+  }
+  var pose27 = RayTracer.computeLEDPose(boxPos, boxIdxFlip, boxInput);
+  assert('T27: 反绕向后 pos 不变', near3(pose27 && pose27.pos, [6, 5, 25], 1e-6));
+  assert('T27: 反绕向后 z 轴仍为 +X（朝向自动纠正）', near3(pose27 && pose27.z, [1, 0, 0], 1e-6),
+    'z=' + JSON.stringify(pose27 && pose27.z));
+
+  // ============================================================
+  // T28: 位姿引擎光线 → 发光面在 x=6-gap 平面，方向沿 +X（入射面法向）
+  //   矩形 LED L=3(局部x→世界-z) W=2(局部y→世界+y)：z∈[23.5,26.5] y∈[4,6]
+  // ============================================================
+  var rt28 = mkBoxTracer({ enabled: true, type: 'rectangle', length: 3, width: 2, height: 1.5, gap: 0.5, pose: pose25 });
+  var rays28 = rt28._generateRays();
+  var okO28 = true, okD28 = true, meanDx28 = 0;
+  for (var i28 = 0; i28 < rays28.length; i28++) {
+    var o28 = rays28[i28].origin, d28 = rays28[i28].dir;
+    if (Math.abs(o28.x - 5.5) > OFF) okO28 = false;                       // 发光面 x = 6-gap
+    if (Math.abs(o28.y - 5) > 1.0 + OFF || Math.abs(o28.z - 25) > 1.5 + OFF) okO28 = false;
+    if (d28.x <= 0) okD28 = false;                                        // 全部朝 +X 半球
+    if (rays28[i28].inside !== false) okO28 = false;
+    meanDx28 += d28.x;
+  }
+  meanDx28 /= rays28.length;
+  assert('T28: 起点在入射面前方 x=5.5 平面、限于发光面范围内', okO28);
+  assert('T28: 方向全部朝 +X（入射面法向，垂直入射）', okD28);
+  assert('T28: 平均方向沿 +X 法向 (mean dir.x>0.5)', meanDx28 > 0.5, 'mean dir.x=' + fmt(meanDx28, 3));
+
+  // ============================================================
+  // T29: 端到端仿真（导入模型 + 位姿）→ 光线从入射面进入并从出射面射出
+  // ============================================================
+  var rt29 = mkBoxTracer({ enabled: true, type: 'rectangle', length: 3, width: 2, height: 1.5, gap: 0.5, pose: pose25 },
+    { numRays: 300 });
+  var res29 = rt29.simulate();
+  var ledgerSum29 = res29.ledger.output + res29.ledger.side + res29.ledger.absorbed + res29.ledger.residual;
+  var ledgerPct29 = res29.total > 0 ? ledgerSum29 / res29.total * 100 : 0;
+  var airSeg29 = false;
+  for (var i29 = 0; i29 < res29.segments.length; i29++) {
+    var sg29 = res29.segments[i29];
+    if (sg29.type === 'escape' && sg29.start[0] < 5.6 && sg29.end[0] > 5.9) { airSeg29 = true; break; }
+  }
+  assert('T29: 有光线经入射面进入并从出射面成功出射 (success>0)', res29.success > 0,
+    'success=' + res29.success + '/' + res29.total);
+  assert('T29: 存在灯珠→入射面的空中飞行段 (x:5.5→6)', airSeg29);
+  assert('T29: 能量账本守恒 ≥99%', ledgerPct29 >= 99 && ledgerPct29 <= 101,
+    'ledger=' + fmt(ledgerPct29, 1) + '%');
+
+  // ============================================================
+  // T30: 无位姿（旧版行为）→ 光线仍在原点 z=0 平面发射，远离导入模型（复现修复前缺陷）
+  // ============================================================
+  var rt30 = mkBoxTracer({ enabled: true, type: 'rectangle', length: 3, width: 2, height: 1.5, gap: 0.5 });
+  var rays30 = rt30._generateRays();
+  var okLegacy30 = true;
+  for (var i30 = 0; i30 < rays30.length; i30++) {
+    var o30 = rays30[i30].origin;
+    if (Math.abs(o30.x) > 1.5 + OFF || Math.abs(o30.y) > 1.0 + OFF || Math.abs(o30.z + 0.5) > OFF) okLegacy30 = false;
+  }
+  var res30 = rt30.simulate();
+  assert('T30: 无位姿时起点固定在原点 z=-0.5（旧版硬编码行为）', okLegacy30);
+  assert('T30: 旧版行为下绝大多数光线无法到达导入模型 (escaped>80%，仅随机散射少量进入)',
+    res30.escaped > res30.total * 0.8, 'escaped=' + res30.escaped + '/' + res30.total);
+
+  // ============================================================
+  // T31: Viewer 位姿渲染 → LED mesh 移至入射面前方并朝向法向
+  //   xform: center=(10,5,25) scale=0.2；入射面显示 x=-0.8，发光面显示 x=-0.9
+  // ============================================================
+  LG.Viewer.setGeometryData(boxPos, boxIdx, 'imported-box');
+  LG.Viewer.setLED({ enabled: true, type: 'rectangle', length: 3, width: 2, height: 1.5, gap: 0.5, pose: pose25 });
+  var led31 = LG.Viewer._ledMesh();
+  var b31 = led31 ? new THREE.Box3().setFromObject(led31) : null;
+  var faceX31 = (6 - 10) * 0.2;                     // -0.8 入射面显示 x
+  var gp31 = led31 ? [led31.position.x, led31.position.y, led31.position.z] : null;
+  var zDir31 = led31 ? new THREE.Vector3(0, 0, 1).applyQuaternion(led31.quaternion) : null;
+  assert('T31: LED group.position = tx3(入射面中心) = (-0.8, 0, 0)',
+    led31 && Math.abs(led31.position.x - (-0.8)) < 0.001 && Math.abs(led31.position.y) < 0.001 &&
+    Math.abs(led31.position.z) < 0.001,
+    'pos=' + JSON.stringify(gp31));
+  assert('T31: LED 局部 +Z 旋转后对齐入射面法向 (+X 显示系)',
+    zDir31 && Math.abs(zDir31.x - 1) < 0.001 && Math.abs(zDir31.y) < 0.001 && Math.abs(zDir31.z) < 0.001,
+    'q·z=' + (zDir31 ? [zDir31.x, zDir31.y, zDir31.z].map(fmt).join(',') : 'null'));
+  assert('T31: LED 整体位于入射面前方 (bbox.max.x < -0.8)',
+    b31 && b31.max.x < faceX31 + 0.001,
+    'max.x=' + (b31 ? fmt(b31.max.x) : 'null') + ' faceX=' + fmt(faceX31));
+  assert('T31: LED 不再停留在原点默认位置 (bbox.max.x ≠ 旧版 -0.1 附近)',
+    b31 && Math.abs(b31.max.x - (-0.9)) < 0.01,
+    'max.x=' + (b31 ? fmt(b31.max.x) : 'null') + ' exp≈-0.9');
+
+  // ============================================================
+  // T32: 兼容性 — 参数化圆柱入射端面的动态位姿 = 恒等位姿（旧版默认位置）
+  //   z=0 端面外法向 -Z → 局部 +Z=+Z；面心 (0,0,0)；x=(0,1,0)×(0,0,1)=(1,0,0)
+  // ============================================================
+  var pose32 = RayTracer.computeLEDPose(built.positions, built.indices, caps.input);
+  assert('T32: 圆柱位姿 pos ≈ (0,0,0)', near3(pose32 && pose32.pos, [0, 0, 0], 1e-6),
+    'pos=' + JSON.stringify(pose32 && pose32.pos));
+  assert('T32: 圆柱位姿 z ≈ +Z（与默认行为一致）', near3(pose32 && pose32.z, [0, 0, 1], 1e-6),
+    'z=' + JSON.stringify(pose32 && pose32.z));
+  assert('T32: 圆柱位姿 x ≈ +X, y ≈ +Y', near3(pose32 && pose32.x, [1, 0, 0], 1e-6) &&
+    near3(pose32 && pose32.y, [0, 1, 0], 1e-6));
+  assert('T32: computeLEDPose 空入参 → null',
+    RayTracer.computeLEDPose(built.positions, built.indices, []) === null);
+
+  // ============================================================
+  // T33: computeLEDPoses 多平面聚类 — 两个相对端面 [0,1]+[2,3] → 2 颗灯珠
+  //   z=15 面 (ids 0,1): pos=(10,5,15), z=+Z, area=8×6=48
+  //   z=35 面 (ids 2,3): pos=(10,5,35), z=-Z, area=48
+  // ============================================================
+  var poses33 = RayTracer.computeLEDPoses(boxPos, boxIdx, [0, 1, 2, 3]);
+  assert('T33: 两个入射平面 → 2 颗灯珠位姿', poses33 && poses33.length === 2,
+    'count=' + (poses33 && poses33.length));
+  var pA33 = poses33 && poses33[0], pB33 = poses33 && poses33[1];
+  assert('T33: 位姿A pos=(10,5,15), z=+Z', pA33 && near3(pA33.pos, [10, 5, 15], 1e-6) && near3(pA33.z, [0, 0, 1], 1e-6),
+    pA33 ? ('pos=' + JSON.stringify(pA33.pos) + ' z=' + JSON.stringify(pA33.z)) : 'null');
+  assert('T33: 位姿B pos=(10,5,35), z=-Z', pB33 && near3(pB33.pos, [10, 5, 35], 1e-6) && near3(pB33.z, [0, 0, -1], 1e-6),
+    pB33 ? ('pos=' + JSON.stringify(pB33.pos) + ' z=' + JSON.stringify(pB33.z)) : 'null');
+  assert('T33: 各位姿附带面积 48（光线数分配权重）',
+    pA33 && pB33 && Math.abs(pA33.area - 48) < 1e-6 && Math.abs(pB33.area - 48) < 1e-6,
+    pA33 ? ('areaA=' + fmt(pA33.area) + ' areaB=' + fmt(pB33.area)) : 'null');
+
+  // ============================================================
+  // T34: 聚类合并/拆分 — 同一平面多次拾取合并为 1 颗；3 个平面 → 3 颗
+  // ============================================================
+  var poses34a = RayTracer.computeLEDPoses(boxPos, boxIdx, [4, 5]);       // 仅 x=6 面
+  var poses34b = RayTracer.computeLEDPoses(boxPos, boxIdx, [0, 1, 2, 3, 4, 5]); // z15+z35+x6
+  assert('T34: 单一平面 [4,5] → 1 颗灯珠（area=120）',
+    poses34a && poses34a.length === 1 && Math.abs(poses34a[0].area - 120) < 1e-6,
+    'count=' + (poses34a && poses34a.length) + ' area=' + (poses34a && poses34a[0] && fmt(poses34a[0].area)));
+  assert('T34: 三个平面 [0..5] → 3 颗灯珠', poses34b && poses34b.length === 3,
+    'count=' + (poses34b && poses34b.length));
+  assert('T34: 空入参 → null', RayTracer.computeLEDPoses(boxPos, boxIdx, []) === null);
+
+  // ============================================================
+  // T35: 引擎多位姿光线生成 — 总光线数按面积均分（48:48 → 各 100），
+  //   两半光线分别从 z=14.5 / z=35.5 发光面发出，方向 +Z / -Z
+  // ============================================================
+  var rt35 = mkBoxTracer({ enabled: true, type: 'rectangle', length: 3, width: 2, height: 1.5, gap: 0.5, poses: poses33 });
+  var rays35 = rt35._generateRays();
+  var nA35 = 0, nB35 = 0, sumA35 = 0, sumB35 = 0, okR35 = true;
+  for (var i35 = 0; i35 < rays35.length; i35++) {
+    var r35 = rays35[i35];
+    if (Math.abs(r35.origin.z - 14.5) < 0.1) { nA35++; sumA35 += r35.dir.z; }
+    else if (Math.abs(r35.origin.z - 35.5) < 0.1) { nB35++; sumB35 += r35.dir.z; }
+    else okR35 = false;
+    if (Math.abs(r35.origin.x - 10) > 1.6 || Math.abs(r35.origin.y - 5) > 1.1) okR35 = false;
+  }
+  assert('T35: 光线总数=200 且全部落在两个发光面上', rays35.length === 200 && okR35,
+    'total=' + rays35.length + ' A=' + nA35 + ' B=' + nB35);
+  assert('T35: 面积均分 → 各 100 条', nA35 === 100 && nB35 === 100, 'A=' + nA35 + ' B=' + nB35);
+  assert('T35: 两组平均方向分别沿 +Z / -Z（Lambert 围绕各自入射面法向）',
+    nA35 > 0 && nB35 > 0 && sumA35 / nA35 > 0.5 && sumB35 / nB35 < -0.5,
+    'meanA.z=' + fmt(nA35 ? sumA35 / nA35 : 0, 3) + ' meanB.z=' + fmt(nB35 ? sumB35 / nB35 : 0, 3));
+
+  // ============================================================
+  // T36: 拾取合并逻辑 computeFacePickUpdate
+  //   普通点击=替换；Shift+点击=累加；再点已选面=取消该整面
+  // ============================================================
+  var pk = LG.Viewer.computeFacePickUpdate;
+  assert('T36: 普通点击未选面 → 单选替换',
+    JSON.stringify(pk([1, 2], [7, 8], { shiftKey: false, faceIndex: 7 })) === '[7,8]');
+  assert('T36: Shift+点击 → 累加去重',
+    JSON.stringify(pk([1, 2], [2, 7, 8], { shiftKey: true, faceIndex: 7 })) === '[1,2,7,8]');
+  assert('T36: 再次点击已选面(种子面) → 取消该整面',
+    JSON.stringify(pk([1, 2, 7, 8], [7, 8], { shiftKey: false, faceIndex: 7 })) === '[1,2]');
+  assert('T36: Shift+点击已选面 → 同样取消（toggle）',
+    JSON.stringify(pk([1, 2, 7, 8], [7, 8], { shiftKey: true, faceIndex: 8 })) === '[1,2]');
+  assert('T36: 取消后可为空', JSON.stringify(pk([7, 8], [7, 8], { faceIndex: 7 })) === '[]');
+
+  // ============================================================
+  // T37: Viewer 多灯珠渲染 — poses=[A,B] → 2 个位姿组，位置/朝向各自独立
+  //   xform: center=(10,5,25) scale=0.2 → A 显示 (0,0,-2) 朝 +Z，B 显示 (0,0,+2) 朝 -Z
+  // ============================================================
+  LG.Viewer.setLED({ enabled: true, type: 'rectangle', length: 3, width: 2, height: 1.5, gap: 0.5, poses: poses33 });
+  var leds37 = LG.Viewer._ledMeshes();
+  assert('T37: 渲染 2 颗灯珠', leds37.length === 2, 'count=' + leds37.length);
+  var okP37 = leds37.length === 2 &&
+    Math.abs(leds37[0].position.z - (-2)) < 0.001 && Math.abs(leds37[1].position.z - 2) < 0.001 &&
+    Math.abs(leds37[0].position.x) < 0.001 && Math.abs(leds37[1].position.x) < 0.001;
+  assert('T37: 两颗灯珠分别位于 z=∓2 显示位（各自入射面中心）', okP37,
+    leds37.length === 2 ? ('A=' + fmt(leds37[0].position.z) + ' B=' + fmt(leds37[1].position.z)) : 'null');
+  var zA37 = leds37.length === 2 ? new THREE.Vector3(0, 0, 1).applyQuaternion(leds37[0].quaternion) : null;
+  var zB37 = leds37.length === 2 ? new THREE.Vector3(0, 0, 1).applyQuaternion(leds37[1].quaternion) : null;
+  assert('T37: 两颗灯珠发射方向相反（+Z / -Z，各对齐自入射面法向）',
+    zA37 && zB37 && Math.abs(zA37.z - 1) < 0.001 && Math.abs(zB37.z + 1) < 0.001,
+    zA37 ? ('zA=' + fmt(zA37.z) + ' zB=' + fmt(zB37.z)) : 'null');
+
+  // ============================================================
+  // 清理
+  // ============================================================
+  LG.Viewer.setLED({ enabled: false });
+  LG.Viewer.setGeometryData(built.positions, built.indices, 'restore-cylinder');
+  LG.Viewer.unmount();
+  document.body.removeChild(slot);
+
+  // ============================================================
+  // 输出结果
+  // ============================================================
+  var html = '';
+  var passCount = 0, failCount = 0;
+  results.forEach(function (r) {
+    if (r.pass) passCount++; else failCount++;
+    html += '<div class="result ' + (r.pass ? 'pass' : 'fail') + '">' +
+      '<span class="label">' + (r.pass ? '✓' : '✗') + ' ' + r.name + '</span>' +
+      (r.detail ? '<div class="detail">' + r.detail + '</div>' : '') +
+      '</div>';
+  });
+  html = '<div class="result ' + (failCount === 0 ? 'pass' : 'fail') + '" style="font-size:16px;margin-bottom:16px">' +
+    '<span class="label">总计: ' + passCount + ' 通过 / ' + failCount + ' 失败 / ' + results.length + ' 项</span></div>' + html;
+  document.getElementById('results').innerHTML = html;
+})();
+</script>
+</body>
+</html>

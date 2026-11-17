@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>光线坐标系对齐 — 单元测试</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #F8FAFC; color: #0A1628; margin: 0; padding: 32px; }
+  h1 { font-size: 20px; margin: 0 0 20px; }
+  .result { padding: 10px 16px; margin: 6px 0; border-radius: 8px; border: 1px solid #E2E8F0; background: #fff; }
+  .pass { border-left: 4px solid #22c55e; }
+  .fail { border-left: 4px solid #ef4444; }
+  .label { font-weight: 700; font-size: 14px; }
+  .detail { font-size: 12px; color: #64748B; margin-top: 4px; font-family: monospace; }
+  pre { background: #f1f5f9; padding: 8px 12px; border-radius: 6px; font-size: 12px; overflow-x: auto; }
+</style>
+</head>
+<body>
+<h1>光线坐标系对齐单元测试</h1>
+<div id="results"></div>
+
+<!-- 被测代码 -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js"></script>
+<script src="../js/geometry.js"></script>
+<script src="../js/engine/raytracer.js"></script>
+<script src="../js/viewer.js"></script>
+
+<script>
+(function () {
+  'use strict';
+  var results = [];
+
+  function assert(name, cond, detail) {
+    results.push({ name: name, pass: !!cond, detail: detail || '' });
+  }
+  function fmt(v, d) { return Number(v).toFixed(d == null ? 4 : d); }
+
+  // ============================================================
+  // T1: 变换参数 — 已知几何 (Ø3×30 圆柱)
+  //   bbox: x∈[-1.5,1.5] y∈[-1.5,1.5] z∈[0,30]
+  //   center=(0,0,15)  maxDim=30  scale=4/30≈0.13333
+  // ============================================================
+  var built = LG.Geometry.build({
+    shape: 'cylinder', d1: 3, d2: 3, length: 30, radialSeg: 24,
+    teeth: { enabled: false, step: 1, width: 0.8, aStart: 85, aEnd: 10, offset: 2 },
+    fileName: ''
+  });
+
+  // 复刻 viewer.js setGeometryData 中的变换逻辑
+  var P = built.positions;
+  var mn = [1e12, 1e12, 1e12], mx = [-1e12, -1e12, -1e12];
+  for (var i = 0; i < P.length; i += 3) {
+    if (P[i] < mn[0]) mn[0] = P[i]; if (P[i] > mx[0]) mx[0] = P[i];
+    if (P[i+1] < mn[1]) mn[1] = P[i+1]; if (P[i+1] > mx[1]) mx[1] = P[i+1];
+    if (P[i+2] < mn[2]) mn[2] = P[i+2]; if (P[i+2] > mx[2]) mx[2] = P[i+2];
+  }
+  var cx = (mn[0] + mx[0]) / 2, cy = (mn[1] + mx[1]) / 2, cz = (mn[2] + mx[2]) / 2;
+  var sizeX = mx[0] - mn[0], sizeY = mx[1] - mn[1], sizeZ = mx[2] - mn[2];
+  var maxDim = Math.max(sizeX, sizeY, sizeZ);
+  var scale = 4 / maxDim;
+
+  assert('T1: 中心 X = 0', Math.abs(cx - 0) < 0.01, 'cx=' + fmt(cx));
+  assert('T1: 中心 Y = 0', Math.abs(cy - 0) < 0.01, 'cy=' + fmt(cy));
+  assert('T1: 中心 Z = 15', Math.abs(cz - 15) < 0.01, 'cz=' + fmt(cz));
+  assert('T1: maxDim = 30', Math.abs(maxDim - 30) < 0.01, 'maxDim=' + fmt(maxDim));
+  assert('T1: scale = 4/30 ≈ 0.1333', Math.abs(scale - 4/30) < 0.001, 'scale=' + fmt(scale));
+
+  // ============================================================
+  // T2: tx() 变换 — 关键点
+  //   tx(v) = (v - center) * scale
+  //   入射端中心 (0,0,0) → (0, 0, -2.0)
+  //   出射端中心 (0,0,30) → (0, 0, +2.0)
+  //   圆柱半径点 (1.5,0,15) → (0.2, 0, 0)
+  // ============================================================
+  function tx(v, c) { return (v - c) * scale; }
+  function tx3(arr) { return [tx(arr[0], cx), tx(arr[1], cy), tx(arr[2], cz)]; }
+
+  var inCenter = tx3([0, 0, 0]);
+  var outCenter = tx3([0, 0, 30]);
+  var radiusPt = tx3([1.5, 0, 15]);
+
+  assert('T2: 入射端中心 → Z=-2.0', Math.abs(inCenter[2] - (-2.0)) < 0.01,
+    'inCenter=' + JSON.stringify(inCenter.map(function(v){return fmt(v)})));
+  assert('T2: 出射端中心 → Z=+2.0', Math.abs(outCenter[2] - 2.0) < 0.01,
+    'outCenter=' + JSON.stringify(outCenter.map(function(v){return fmt(v)})));
+  assert('T2: 半径点 X→+0.2', Math.abs(radiusPt[0] - 0.2) < 0.01,
+    'radiusPt=' + JSON.stringify(radiusPt.map(function(v){return fmt(v)})));
+  assert('T2: 入射端→出射端跨度=4.0', Math.abs(outCenter[2] - inCenter[2] - 4.0) < 0.01,
+    'span=' + fmt(outCenter[2] - inCenter[2]));
+
+  // ============================================================
+  // T3: 变换后所有顶点落在 [-2,+2] 显示范围内
+  // ============================================================
+  var allInside = true, minT = Infinity, maxT = -Infinity;
+  for (var j = 0; j < P.length; j += 3) {
+    var tp = tx3([P[j], P[j+1], P[j+2]]);
+    for (var ax = 0; ax < 3; ax++) {
+      if (tp[ax] < -2.01 || tp[ax] > 2.01) allInside = false;
+      if (tp[ax] < minT) minT = tp[ax];
+      if (tp[ax] > maxT) maxT = tp[ax];
+    }
+  }
+  assert('T3: 所有顶点在 [-2.01,+2.01] 内', allInside, 'min=' + fmt(minT) + ' max=' + fmt(maxT));
+
+  // ============================================================
+  // T4: 仿真光线段经变换后落在模型包围盒内
+  //   运行 100 光线，取所有 segment 端点，变换后检查
+  // ============================================================
+  // 构建 face data + 端面检测
+  var faces = [], normals = [], centers = [], areas = [];
+  var I = built.indices;
+  var count = I ? I.length / 3 : P.length / 9;
+  for (var k = 0; k < count; k++) {
+    var a = I[k*3], b = I[k*3+1], c = I[k*3+2];
+    var A = {x:P[a*3],y:P[a*3+1],z:P[a*3+2]}, B = {x:P[b*3],y:P[b*3+1],z:P[b*3+2]}, C = {x:P[c*3],y:P[c*3+1],z:P[c*3+2]};
+    var e1 = {x:B.x-A.x,y:B.y-A.y,z:B.z-A.z}, e2 = {x:C.x-A.x,y:C.y-A.y,z:C.z-A.z};
+    var n = {x:e1.y*e2.z-e1.z*e2.y, y:e1.z*e2.x-e1.x*e2.z, z:e1.x*e2.y-e1.y*e2.x};
+    var l = Math.sqrt(n.x*n.x+n.y*n.y+n.z*n.z)||1;
+    normals.push({x:n.x/l,y:n.y/l,z:n.z/l});
+    centers.push({x:(A.x+B.x+C.x)/3,y:(A.y+B.y+C.y)/3,z:(A.z+B.z+C.z)/3});
+    areas.push(l*0.5);
+    faces.push({a:A,b:B,c:C});
+  }
+  var caps = RayTracer.autoDetectEndCaps(faces, normals, centers, areas);
+
+  var tracer = new RayTracer({positions: P, indices: I}, {
+    n: 1.49, alpha: 0.10, numRays: 100, maxBounces: 20, angleSigma: 12, posSigma: 0.3,
+    emissionMode: 'lambert', inputFaceIds: caps.input, outputFaceIds: caps.output
+  });
+  var simResult = tracer.simulate(null);
+  var segs = simResult.segments;
+
+  var segInside = true, segChecked = 0;
+  var segMin = [Infinity, Infinity, Infinity], segMax = [-Infinity, -Infinity, -Infinity];
+  for (var s = 0; s < segs.length; s++) {
+    var st = tx3(segs[s].start), en = tx3(segs[s].end);
+    for (var ax2 = 0; ax2 < 3; ax2++) {
+      var lo = Math.min(st[ax2], en[ax2]), hi = Math.max(st[ax2], en[ax2]);
+      if (lo < -2.5 || hi > 2.5) segInside = false;
+      if (lo < segMin[ax2]) segMin[ax2] = lo;
+      if (hi > segMax[ax2]) segMax[ax2] = hi;
+      segChecked++;
+    }
+  }
+  assert('T4: 仿真光线段(' + segs.length + '条)经变换后均在 [-2.5,+2.5] 内', segInside,
+    'checked=' + segChecked + ' segMin=[' + segMin.map(fmt).join(',') + '] segMax=[' + segMax.map(fmt).join(',') + ']');
+
+  // ============================================================
+  // T5: 光线段与模型顶点范围重叠（不脱离模型区域）
+  //   模型顶点范围: [minT, maxT]
+  //   光线段范围: [segMin, segMax]
+  //   光线段必须与模型范围有重叠
+  // ============================================================
+  var overlapX = segMax[0] >= minT && segMin[0] <= maxT;
+  var overlapY = segMax[1] >= minT && segMin[1] <= maxT;
+  var overlapZ = segMax[2] >= minT && segMin[2] <= maxT;
+  assert('T5: 光线与模型 X 轴范围重叠', overlapX,
+    'model=['+fmt(minT)+','+fmt(maxT)+'] rays=['+fmt(segMin[0])+','+fmt(segMax[0])+']');
+  assert('T5: 光线与模型 Y 轴范围重叠', overlapY,
+    'model=['+fmt(minT)+','+fmt(maxT)+'] rays=['+fmt(segMin[1])+','+fmt(segMax[1])+']');
+  assert('T5: 光线与模型 Z 轴范围重叠', overlapZ,
+    'model=['+fmt(minT)+','+fmt(maxT)+'] rays=['+fmt(segMin[2])+','+fmt(segMax[2])+']');
+
+  // ============================================================
+  // T6: 齿形几何 — 同样验证变换对齐
+  // ============================================================
+  var builtTeeth = LG.Geometry.build({
+    shape: 'cylinder', d1: 3, d2: 3, length: 30, radialSeg: 24,
+    teeth: { enabled: true, step: 1, width: 0.8, aStart: 85, aEnd: 10, offset: 2 },
+    fileName: ''
+  });
+  var PT = builtTeeth.positions;
+  var mnT = [1e12,1e12,1e12], mxT = [-1e12,-1e12,-1e12];
+  for (var t = 0; t < PT.length; t += 3) {
+    if (PT[t]<mnT[0]) mnT[0]=PT[t]; if (PT[t]>mxT[0]) mxT[0]=PT[t];
+    if (PT[t+1]<mnT[1]) mnT[1]=PT[t+1]; if (PT[t+1]>mxT[1]) mxT[1]=PT[t+1];
+    if (PT[t+2]<mnT[2]) mnT[2]=PT[t+2]; if (PT[t+2]>mxT[2]) mxT[2]=PT[t+2];
+  }
+  var cT = [(mnT[0]+mxT[0])/2, (mnT[1]+mxT[1])/2, (mnT[2]+mxT[2])/2];
+  var maxDimT = Math.max(mxT[0]-mnT[0], mxT[1]-mnT[1], mxT[2]-mnT[2]);
+  var scT = 4 / maxDimT;
+  function txT(v, c) { return (v - c) * scT; }
+
+  var teethInside = true;
+  for (var u = 0; u < PT.length; u += 3) {
+    var vals = [txT(PT[u], cT[0]), txT(PT[u+1], cT[1]), txT(PT[u+2], cT[2])];
+    for (var ax3 = 0; ax3 < 3; ax3++) {
+      if (vals[ax3] < -2.01 || vals[ax3] > 2.01) teethInside = false;
+    }
+  }
+  assert('T6: 齿形几何(' + (PT.length/3) + '顶点)变换后全在 [-2.01,+2.01] 内', teethInside,
+    'center=['+cT.map(fmt).join(',')+'] scale='+fmt(scT)+' maxDim='+fmt(maxDimT));
+
+  // ============================================================
+  // T7: Viewer.showRays 集成测试 — 真实 BufferGeometry 坐标
+  //   挂载 Viewer → setGeometryData → showRays → 检查 THREE 几何顶点
+  // ============================================================
+  var slot = document.createElement('div');
+  slot.style.cssText = 'width:600px;height:400px;position:fixed;left:-9999px';
+  document.body.appendChild(slot);
+  LG.Viewer.mount(slot);
+  LG.Viewer.setGeometryData(built.positions, built.indices, 'test');
+
+  // 运行仿真获取 segments
+  var tracer2 = new RayTracer({positions: built.positions, indices: built.indices}, {
+    n: 1.49, alpha: 0.0, numRays: 50, maxBounces: 15, angleSigma: 12, posSigma: 0.3,
+    emissionMode: 'lambert',
+    inputFaceIds: caps.input, outputFaceIds: caps.output,
+    returnSegments: true
+  });
+  var sim2 = tracer2.simulate(null);
+
+  if (sim2.segments && sim2.segments.length > 0) {
+    LG.Viewer.showRays(sim2.segments);
+
+    var rayArr = LG.Viewer._rayPositions();
+    if (rayArr) {
+      var rayMin = [Infinity, Infinity, Infinity], rayMax = [-Infinity, -Infinity, -Infinity];
+      var allInBounds = true;
+      for (var ri = 0; ri < rayArr.length; ri += 3) {
+        for (var ax4 = 0; ax4 < 3; ax4++) {
+          var val = rayArr[ri + ax4];
+          if (val < rayMin[ax4]) rayMin[ax4] = val;
+          if (val > rayMax[ax4]) rayMax[ax4] = val;
+          if (val < -3 || val > 3) allInBounds = false;
+        }
+      }
+      assert('T7: showRays 顶点在 [-3,+3] 内', allInBounds,
+        'count=' + (rayArr.length/3) + ' min=[' + rayMin.map(fmt).join(',') + '] max=[' + rayMax.map(fmt).join(',') + ']');
+      assert('T7: showRays Z 范围与模型 Z 范围重叠', rayMax[2] >= -2.01 && rayMin[2] <= 2.01,
+        'rayZ=['+fmt(rayMin[2])+','+fmt(rayMax[2])+'] modelZ=[-2,2]');
+    } else {
+      assert('T7: _rayPositions 返回数据', false, 'null returned');
+    }
+  } else {
+    assert('T7: 仿真产生 segments', false, 'no segments returned');
+  }
+  LG.Viewer.unmount();
+  document.body.removeChild(slot);
+
+  // ============================================================
+  // 输出结果
+  // ============================================================
+  var html = '';
+  var passCount = 0, failCount = 0;
+  results.forEach(function (r) {
+    if (r.pass) passCount++; else failCount++;
+    html += '<div class="result ' + (r.pass ? 'pass' : 'fail') + '">' +
+      '<span class="label">' + (r.pass ? '✓' : '✗') + ' ' + r.name + '</span>' +
+      (r.detail ? '<div class="detail">' + r.detail + '</div>' : '') +
+      '</div>';
+  });
+  html = '<div class="result ' + (failCount === 0 ? 'pass' : 'fail') + '" style="font-size:16px;margin-bottom:16px">' +
+    '<span class="label">总计: ' + passCount + ' 通过 / ' + failCount + ' 失败 / ' + results.length + ' 项</span></div>' + html;
+  document.getElementById('results').innerHTML = html;
+})();
+</script>
+</body>
+</html>

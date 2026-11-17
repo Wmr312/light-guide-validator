@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>导光柱光迹模拟工具 | light-guide-validator</title>
+<link rel="stylesheet" href="css/style.css?v=36">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><span class="brand-mark">lg</span><span data-i18n="brand"></span></div>
+  <nav id="main-nav">
+    <a href="#/home"    class="nav-item" data-i18n="nav.home"></a>
+    <a href="#/model"    class="nav-item" data-i18n="nav.model"></a>
+    <a href="#/simulate" class="nav-item" data-i18n="nav.simulate"></a>
+    <a href="#/analysis" class="nav-item" data-i18n="nav.analysis"></a>
+    <a href="#/report"   class="nav-item" data-i18n="nav.report"></a>
+    <button id="opts-btn" type="button" class="nav-item opts-btn" data-i18n="nav.options"></button>
+  </nav>
+  <div class="lang-switch" id="lang-switch">
+    <button class="lang-btn" data-lang="zh">简中</button>
+    <button class="lang-btn" data-lang="en">EN</button>
+  </div>
+</header>
+
+<main id="view"></main>
+
+<div id="status-bar" class="status-bar"></div>
+
+<!-- Three.js r137 (classic UMD) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/loaders/STLLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/loaders/OBJLoader.js"></script>
+<!-- App scripts (classic, no modules) -->
+<script src="js/i18n.js?v=56"></script>
+<script src="js/store.js?v=20"></script>
+<script src="js/router.js?v=7"></script>
+<script src="js/geometry.js?v=8"></script>
+<script src="js/viewer.js?v=57"></script>
+<script src="js/charts.js?v=22"></script>
+<script src="js/engine/raytracer.js?v=35"></script>
+<script src="js/modules/home.js?v=5"></script>
+<script src="js/modules/model.js?v=44"></script>
+<script src="js/modules/simulate.js?v=25"></script>
+<script src="js/modules/analysis.js?v=24"></script>
+<script src="js/modules/spot.js?v=20"></script>
+<script src="js/modules/report.js?v=22"></script>
+<script src="js/modules/options.js?v=12"></script>
+<script src="js/app.js?v=22"></script>
+</body>
+</html>

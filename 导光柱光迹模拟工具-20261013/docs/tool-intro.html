@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>导光柱光迹模拟工具 — 原理与功能说明</title>
+<style>
+  :root {
+    --accent: #0E9F8A; --accent-strong: #0B8471; --accent-soft: #E3F4F0;
+    --ink: #0A1628; --muted: #64748B; --line: #E2E8F0; --bg: #F4F8FB;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; background: var(--bg); color: var(--ink); margin: 0; line-height: 1.75; font-size: 14.5px; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 40px 28px 80px; }
+  header.doc { background: linear-gradient(135deg, var(--accent) 0%, #14B8A6 100%); color: #fff; border-radius: 18px; padding: 34px 36px; margin-bottom: 26px; }
+  header.doc h1 { margin: 0 0 8px; font-size: 27px; letter-spacing: .5px; }
+  header.doc p { margin: 0; opacity: .94; font-size: 14.5px; }
+  .ver { display: inline-block; margin-top: 12px; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35); padding: 3px 12px; border-radius: 999px; font-size: 12.5px; }
+  h2 { font-size: 20px; margin: 44px 0 12px; padding-left: 12px; border-left: 4px solid var(--accent); }
+  h3 { font-size: 15.5px; margin: 26px 0 8px; color: var(--accent-strong); }
+  h4 { font-size: 14px; margin: 16px 0 6px; color: var(--ink); }
+  p { margin: 8px 0; }
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px; margin: 14px 0; box-shadow: 0 1px 3px rgba(10,22,40,.05); }
+  .card h3:first-child, .card h4:first-child { margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; background: #fff; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; white-space: nowrap; background: #FAFCFE; }
+  tr:last-child td { border-bottom: none; }
+  code, .k { font-family: Consolas, Menlo, monospace; background: #EEF3F8; border-radius: 5px; padding: 1px 6px; font-size: 12.5px; color: #0B7285; }
+  .ui { font-weight: 600; color: #0B6B5E; }
+  .tip { background: var(--accent-soft); border-left: 4px solid var(--accent); border-radius: 8px; padding: 10px 14px; margin: 10px 0; font-size: 13.5px; }
+  .warn { background: #FEF6E6; border-left: 4px solid #D97706; border-radius: 8px; padding: 10px 14px; margin: 10px 0; font-size: 13.5px; }
+  .toc { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; margin: 12px 0; }
+  .toc-ch { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+  .toc-ch:hover { border-color: var(--accent); }
+  .toc-ch > a { display: block; text-decoration: none; color: var(--ink); font-size: 13.5px; }
+  .toc-ch > a b { color: var(--accent-strong); display: block; margin-bottom: 2px; font-size: 14px; }
+  .toc-ch > a span { color: var(--muted); font-size: 12.5px; }
+  .toc-sub { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+  .toc-sub a { display: inline-block; margin: 2px 10px 2px 0; text-decoration: none; color: var(--muted); font-size: 12.5px; }
+  .toc-sub a:hover { color: var(--accent-strong); }
+  .diagram { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 8px; margin: 14px 0; }
+  .diagram svg { width: 100%; height: auto; display: block; }
+  .diagram .cap { color: var(--muted); font-size: 12.5px; margin: 4px 2px 4px; }
+  .term td:first-child { width: 150px; font-weight: 600; color: var(--accent-strong); }
+  .compact td, .compact th { padding: 7px 10px; }
+  .tag { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-strong); margin-right: 4px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 680px) { .two { grid-template-columns: 1fr; } }
+  details { margin: 8px 0; }
+  summary { cursor: pointer; font-weight: 600; color: var(--accent-strong); padding: 6px 0; }
+  footer { margin-top: 60px; color: var(--muted); font-size: 12.5px; text-align: center; }
+  @media print {
+    body { background: #fff; font-size: 12.5px; }
+    .wrap { max-width: none; padding: 0; }
+    header.doc { border-radius: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .card, .diagram { box-shadow: none; break-inside: avoid; }
+    details { display: block; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>导光柱光迹模拟工具 · 原理与功能说明</h1>
+  <p>给机构工程师看的“结果是怎么算出来的、界面上每一项管什么”</p>
+  <span class="ver">文档更新：2026-11-11 · 与当前代码界面一致 · 单文件离线可读</span>
+</header>
+
+<h2 id="readme">读之前：这份文档怎么用</h2>
+<div class="card">
+  <p><b>一句话原理</b>：把 LED 的发光面“撒”成上千条很细的光线，让每条光线在零件表面按折射、全反射等规则继续走，最后统计从出射端出来的光落在什么位置、还剩多少能量。它不是拍照，也不是实验室测量，而是用大量随机样本做的<b>统计估算</b>。</p>
+  <p>全文分三章：第 1 章讲“怎么算”，第 2 章讲“什么时候用、看完什么就能拍板”，第 3 章按界面顺序逐项说明每个卡片、按钮和输入框。术语第一次出现时会给一句白话解释，不需要光学背景。</p>
+  <div class="toc">
+    <div class="toc-ch">
+      <a href="#ch1"><b>第 1 章 · 机制原理</b><span>从 CAD 面片到光线、材料、统计与结论</span></a>
+      <div class="toc-sub">
+        <a href="#s11">1.1 三角面</a><a href="#s12">1.2 光线发射</a><a href="#s13">1.3 光路物理</a><a href="#s14">1.4 蒙特卡洛</a><a href="#s15">1.5 参数绑定</a><a href="#s16">1.6 光斑统计</a><a href="#s17">1.7 结论阈值</a>
+      </div>
+    </div>
+    <div class="toc-ch">
+      <a href="#ch2"><b>第 2 章 · 主要使用场景</b><span>选型、亮度、亮暗斑、公差、串光、评审</span></a>
+      <div class="toc-sub">
+        <a href="#s21">2.1 新项目选型</a><a href="#s22">2.2 亮度不足</a><a href="#s23">2.3 亮暗斑</a><a href="#s24">2.4 配合公差</a><a href="#s25">2.5 串光漏光</a><a href="#s26">2.6 评审报告</a>
+      </div>
+    </div>
+    <div class="toc-ch">
+      <a href="#ch3"><b>第 3 章 · 界面功能</b><span>导航、3D 窗口、五个页面与项目管理</span></a>
+      <div class="toc-sub">
+        <a href="#s31">3.1 导航与 3D</a><a href="#s32">3.2 Home</a><a href="#s33">3.3 模型配置</a><a href="#s34">3.4 仿真计算</a><a href="#s35">3.5 结果分析</a><a href="#s36">3.6 报告生成</a><a href="#s37">3.7 项目与选项</a>
+      </div>
+    </div>
+  </div>
+  <table class="compact">
+    <tr><th>它擅长回答</th><th>它不擅长回答</th></tr>
+    <tr>
+      <td>两个结构/材料/灯珠方案谁更亮、谁更匀；光斑大概长什么样；LED 偏 0.1–0.3 mm 后亮度掉多少；评审时能不能拿出一份有数据、有风险清单的报告。</td>
+      <td>实验室级的绝对亮度（lux）和色度；模具咬花纹理的细节；外壳、泡棉、反光片的真实回光；人眼对色差的主观感受。这些需要实测或更专业的光学软件。</td>
+    </tr>
+  </table>
+  <div class="tip"><b>读结论前先记住</b>：界面上的“亮度”“强度”大多是<b>相对值</b>（0–1），只有“总出光亮度”按光通量折算成 lm。它们适合横向比较和看趋势，不能直接当规格书上的绝对值。</div>
+</div>
+
+<h3>术语速查（第一次出现时也会解释）</h3>
+<div class="card">
+  <table class="term compact">
+    <tr><td>折射率 n</td><td>光在这种材料里比在空气里“走得慢”多少的比值。n 越大，光线在界面拐弯越明显。光学塑料常见 1.49–1.59。</td></tr>
+    <tr><td>全反射</td><td>光从密材料射向空气时，入射角太大就“出不去”，被界面整条反射回材料内部。导光柱就是靠它把光关在里面往前送。</td></tr>
+    <tr><td>光通量（lm）</td><td>光源总共发出多少“可见光能量”，单位流明。LED 型号库里的 5 lm、10 lm 就是它。</td></tr>
+    <tr><td>照度 / 相对光强</td><td>单位面积上落了多少光。本工具用 0–1 的相对值表示，不标 lux。</td></tr>
+    <tr><td>均匀度 Emin/Eavg</td><td>端面最暗格子的强度 ÷ 所有有光格子的平均强度。越接近 1 越均匀；0.7 表示最暗处还有平均值的七成。</td></tr>
+    <tr><td>光斑</td><td>光从出射端面出来后，在端面上形成的亮暗分布。本工具的探测面固定在出射端端面上（距离 d=0）。</td></tr>
+    <tr><td>咬花 / 雾面</td><td>模具表面做的细微粗糙纹理，让光线打到表面时方向被打散，出光更柔和，但侧面也更容易漏光。</td></tr>
+    <tr><td>扩散粉</td><td>混在塑料里的微小颗粒，光在材料内部就会被多次打散，用来把“中间亮、边缘暗”变成更均匀的面光。</td></tr>
+    <tr><td>装配间隙</td><td>LED 发光面到导光柱入光端面之间的空气距离。太小可能顶住/遮挡，太大光线散开、耦合变差。</td></tr>
+    <tr><td>CTQ / 公差</td><td>对结果影响最大的关键尺寸及其允许波动。这里主要指 LED 相对入光面的横向偏位和间隙。</td></tr>
+  </table>
+</div>
+
+<h2 id="ch1">第 1 章　机制原理：这个工具怎么算出结果</h2>
+<p>这一章按数据流走一遍：模型怎么变成可计算的面片 → 光线从哪里、以什么方向出发 → 在零件里遇到什么 → 为什么结果是统计值 → 参数在后台怎么绑定 → 出射端怎么统计 → 结论阈值怎么定。</p>
+
+<h3 id="s11">1.1　从导入 CAD 到可计算的面片</h3>
+<div class="card">
+  <p>软件不直接“理解”CAD 实体，它只认<b>三角面片</b>。导入时先把模型拆成一堆三角形，每个三角形记录三个顶点；如果文件自带顶点索引，就复用顶点、只存索引，省内存也方便判断“哪些面是连着的”。</p>
+  <ol>
+    <li><b>选择文件</b>：支持 <span class="k">.stl</span>、<span class="k">.obj</span>、<span class="k">.step/.stp</span>。STL 本身就是三角面片集合；OBJ 的面会被拆成三角形；STEP 是实体格式，需要先用浏览器端 CAD 内核把它<b>离散成三角网格</b>再进入同一条流水线。</li>
+    <li><b>算面数据</b>：对每个三角形，用两条边做叉积得到<b>面法向</b>（面朝哪边），叉积长度的一半就是<b>面积</b>，三个顶点的平均就是<b>面中心</b>。这三个量后面到处都要用：法向决定折射/反射方向，面积决定光线怎么分配、统计怎么加权。</li>
+    <li><b>修网格</b>：STL 常见“重复顶点、法线乱翻”。软件会焊接重复顶点、沿共享边把相邻三角形的绕向统一，再用探针判断整体法线是否朝外，必要时整体翻转。</li>
+    <li><b>建加速网格</b>：按模型包围盒的最长边切成约 30 份，形成三维格子；每个三角形按面中心放进格子。光线求交时只检查附近格子（默认半径 2 格），不用和几十万个面逐一比较。</li>
+    <li><b>求交</b>：光线与三角形用 Möller–Trumbore 解析求交，能直接算出交点在光线上的距离和是否命中。这是整个引擎最内层、调用次数最多的计算。</li>
+  </ol>
+  <div class="diagram">
+    <svg viewBox="0 0 860 190" role="img" aria-label="从 CAD 文件到可计算面片的流程图">
+      <defs>
+        <marker id="ar1" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" fill="#0E9F8A"/>
+        </marker>
+      </defs>
+      <g font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="12.5">
+        <rect x="14" y="58" width="118" height="62" rx="10" fill="#F8FCFB" stroke="#BFE5DD"/>
+        <text x="73" y="82" text-anchor="middle" fill="#0A1628" font-weight="700">CAD 文件</text>
+        <text x="73" y="101" text-anchor="middle" fill="#64748B">STL / OBJ / STEP</text>
+
+        <rect x="158" y="58" width="128" height="62" rx="10" fill="#F8FCFB" stroke="#BFE5DD"/>
+        <text x="222" y="82" text-anchor="middle" fill="#0A1628" font-weight="700">三角化</text>
+        <text x="222" y="101" text-anchor="middle" fill="#64748B">顶点 + 索引</text>
+
+        <rect x="312" y="58" width="150" height="62" rx="10" fill="#F8FCFB" stroke="#BFE5DD"/>
+        <text x="387" y="82" text-anchor="middle" fill="#0A1628" font-weight="700">面数据</text>
+        <text x="387" y="101" text-anchor="middle" fill="#64748B">法向 / 面积 / 中心</text>
+
+        <rect x="488" y="58" width="140" height="62" rx="10" fill="#F8FCFB" stroke="#BFE5DD"/>
+        <text x="558" y="82" text-anchor="middle" fill="#0A1628" font-weight="700">空间网格</text>
+        <text x="558" y="101" text-anchor="middle" fill="#64748B">按面中心分格</text>
+
+        <rect x="654" y="58" width="172" height="62" rx="10" fill="#E3F4F0" stroke="#0E9F8A"/>
+        <text x="740" y="82" text-anchor="middle" fill="#0B8471" font-weight="700">可计算的面片</text>
+        <text x="740" y="101" text-anchor="middle" fill="#64748B">求交 / 折射 / 统计</text>
+
+        <line x1="132" y1="89" x2="154" y2="89" stroke="#0E9F8A" stroke-width="1.6" marker-end="url(#ar1)"/>
+        <line x1="286" y1="89" x2="308" y2="89" stroke="#0E9F8A" stroke-width="1.6" marker-end="url(#ar1)"/>
+        <line x1="462" y1="89" x2="484" y2="89" stroke="#0E9F8A" stroke-width="1.6" marker-end="url(#ar1)"/>
+        <line x1="628" y1="89" x2="650" y2="89" stroke="#0E9F8A" stroke-width="1.6" marker-end="url(#ar1)"/>
+
+        <text x="158" y="146" fill="#64748B" font-size="11.5">曲面被离散成很多小三角</text>
+        <text x="488" y="146" fill="#64748B" font-size="11.5">越密的网格越接近真实曲面，但计算越慢</text>
+      </g>
+    </svg>
+    <div class="cap">图 1　模型导入后的处理链：先把形状变成三角面，再给每个面算好法向、面积和空间位置。</div>
+  </div>
+  <h4>为什么必须三角化？</h4>
+  <p>因为“光线打到某个面上”这件事，只有对平面三角形才有稳定、可快速计算的解析解。CAD 里的圆柱、圆角、自由曲面都不是平面，必须先切成足够小的三角面来近似。切得越细，形状越接近，但面数多、计算慢；切得太粗，圆角会变成折线，光路和光斑都会失真。</p>
+  <div class="tip"><b>给机构工程师的导出建议</b>：单位用 mm；一个零件尽量是一个连通实体；圆柱/圆角至少给到 8 段以上；薄壁和入光端的小特征不要被简化掉。另外，导入的网格文件不会跟着项目 JSON 一起长期保存，<b>刷新页面后需要重新导入文件</b>。</div>
+</div>
+
+<h3 id="s12">1.2　光线从哪里出发：LED 发光面、间隙与偏心</h3>
+<div class="card">
+  <p>打开模型配置页，<span class="ui">LED 灯珠选型库</span>是其中一张一级卡片，新项目默认就是启用状态。灯珠由两部分组成：一块<b>发光面</b>（真正发光的矩形/球冠）和包着它的<b>本体</b>。发光面悬在入光端面前方，中间隔着一段空气，就是装配间隙。</p>
+  <h4>发光面的四种形状</h4>
+  <table class="compact">
+    <tr><th>灯珠类型</th><th>怎么采样</th><th>对光的影响</th></tr>
+    <tr><td>矩形 / 正方形</td><td>在 L×W 的平面上均匀撒点，法向朝入光面</td><td>最接近常见贴片 LED 的发光区，默认选它</td></tr>
+    <tr><td>圆柱形半球型凹面</td><td>在一个球碗的球冠面上撒点，球碗朝外</td><td>凹面像小反光碗，出射更集中，中心更亮</td></tr>
+    <tr><td>圆柱半球型凸面</td><td>在一个外凸球冠上撒点，法线沿曲面朝外</td><td>凸面像小透镜，出射更发散，光斑更铺开</td></tr>
+  </table>
+  <p>发光面尺寸、灯珠高度、凹面深度、凸面半径都在卡片里填。选“正方形”时宽度自动等于长度；选凹面/凸面时才出现对应的深度/半径输入框。</p>
+  <h4>装配间隙 gap</h4>
+  <p>光线不是从导光柱内部开始的，而是从空气里的发光面出发，先飞过 gap，第一次打到入光端面时发生折射，才进入材料。gap 大，光线在空气里散得更开，入光面能接住的比例下降；gap 小，耦合更好，但量产时可能顶到、遮挡或擦伤。界面里这个值只出现一次（文件导入卡片的“装配间隙”），改动后会同步写成灯珠的间距，不需要在两处各填一遍。</p>
+  <h4>朗伯还是高斯</h4>
+  <table class="compact">
+    <tr><th>发光方式</th><th>白话</th><th>什么时候像</th></tr>
+    <tr><td>朗伯 Lambert</td><td>正前方最亮，越斜越暗，按余弦规律铺开（约 120° 视角）</td><td>绝大多数贴片 LED 的发光面，<b>默认</b></td></tr>
+    <tr><td>高斯 Gauss</td><td>方向集中在一个锥形里，用 σ 控制“散多开”</td><td>带透镜的窄光束、准直光源；σ 是标准差，不是规格书半角</td></tr>
+  </table>
+  <p>每条光线的起点在发光面上随机取，方向在局部法线周围随机偏转。因此即使参数完全不变，两次运行的光斑也会有轻微颗粒差异，这是蒙特卡洛方法的正常现象。</p>
+  <h4>多颗灯珠、多个入射面怎么分配光线</h4>
+  <p>仿真页可以“＋ 增加灯珠”，每颗灯珠单独绑定自己的入射面和出射面。引擎会为每颗灯珠算一个<b>位姿</b>：把该灯珠所有入射面的中心按面积加权，得到一个平均中心；把法向按面积加权，得到一个平均朝向；再用探针确认哪边朝外。灯珠就放在这个面外、沿法向往回退 gap 的位置。</p>
+  <p>总光线数不是平均分，而是<b>按每颗灯珠对应入射面的面积加权</b>：面积大的分得多，最后一点余数给最后一颗。这样大入光面不会被小入光面“抢走”采样，统计更合理。</p>
+  <h4>LED 的 X / Y 偏心：只动灯珠，不动零件</h4>
+  <p><span class="ui">X 偏移</span>、<span class="ui">Y 偏移</span>（单位 mm，范围 −2～2）表示灯珠相对入光面的装配偏位。代码里只把发光面沿灯珠位姿的局部 X/Y 平移，<b>导光柱网格完全不动</b>；3D 窗口里的灯珠也用同一套公式偏移，所以看到的位置和算出来的位置是一致的。改偏移后旧的光路轨迹会立即清掉，避免屏幕上留着“停在旧位置”的假光路。</p>
+  <div class="tip"><b>如果关闭了 LED</b>：引擎会退回“端面光源”模式——光线从入光面出发，默认面光源、朗伯分布、683 lm、1000 条。当前界面没有单独的光源参数卡片，正常流程建议保持 LED 启用，用灯珠型号和亮度档控制光源。</div>
+</div>
+
+<h3 id="s13">1.3　光在零件里经历了什么</h3>
+<div class="card">
+  <p>一条光线进入材料后，每一段都在重复三件事：先按吸收衰减能量，再判断打到哪个面、这个面有没有咬花，最后决定是折射出去、全反射回来，还是在体内被扩散粉打散。下面逐项说清楚，以及它对“亮度/均匀度”意味着什么。</p>
+  <table class="compact">
+    <tr><th>现象</th><th>白话解释</th><th>代码里怎么做</th><th>对结果的影响</th></tr>
+    <tr>
+      <td><b>折射</b></td>
+      <td>光从一种材料斜着进入另一种材料时会拐弯，折射率差得越多拐得越厉害。</td>
+      <td>用 Snell 定律计算折射方向；入光面从空气进材料，出射面从材料出空气。</td>
+      <td>决定光线能不能顺利进入、从出射面出去时往哪个角度偏。折射角太斜，出射面就可能出不去。</td>
+    </tr>
+    <tr>
+      <td><b>全反射 TIR</b></td>
+      <td>光从密材料射向空气，入射角超过临界角就“撞墙弹回”，一点都出不去。</td>
+      <td>折射公式无解时改为镜面反射；出射面如果角度太斜，也会被反射回体内继续走。</td>
+      <td>这是导光柱能把光送到远端的原因；但出射端角度不对时，光会被锁在里面，亮度下降。</td>
+    </tr>
+    <tr>
+      <td><b>菲涅尔反射</b></td>
+      <td>真实界面即使能透光，也会反射掉一小部分（斜看玻璃像镜子）。</td>
+      <td><b>当前版本没有做部分反射分光</b>：能折射就全部按折射走，不能折射才全反射。因此模拟结果偏乐观，少算了界面反射损失。</td>
+      <td>实际样品通常比模拟略暗一点。做绝对亮度对标时要留这个余量，方案之间比较不受影响。</td>
+    </tr>
+    <tr>
+      <td><b>材料吸收</b></td>
+      <td>光在塑料里走也会被“吃掉”一点，走得越长剩得越少。</td>
+      <td>Beer-Lambert：每段按 I=I₀·exp(−α·L) 衰减，α 是吸收系数（1/mm），L 是这段在材料里的长度。</td>
+      <td>长导光柱、深色料、回收料会明显变暗。默认 PMMA 的 α=0.0005，30 mm 末端大约还剩 98.5%；α 调到 0.01 就只剩约 74%。</td>
+    </tr>
+    <tr>
+      <td><b>体散射（扩散粉）</b></td>
+      <td>光在材料内部撞到扩散颗粒，方向被打散，像在雾里走。</td>
+      <td>按散射系数 μs 抽一个自由程，走到那里就按 HG 相函数改变方向；散射不占用“最大反弹次数”，单独最多 500 次。</td>
+      <td>光斑更饱满、更均匀，但一部分光会提前打到侧壁漏掉。匀光和亮度是一对矛盾，档位越高越匀、总出射越低。</td>
+    </tr>
+    <tr>
+      <td><b>表面咬花 / 雾面</b></td>
+      <td>模具表面的细纹会把打到表面的光“打散”一点，不再是完美镜面。</td>
+      <td>按入射面/出射面/侧面分别给散射半角 σ，用高斯微面元扰动法线；只改方向，<b>不扣能量</b>。</td>
+      <td>出光更柔和、亮暗过渡更自然；σ 越大侧面漏光越多。因为不扣能量，模拟会比真实咬花略亮。</td>
+    </tr>
+  </table>
+  <h4>三个“偏乐观”的地方，读结果时要心里有数</h4>
+  <ul>
+    <li>界面反射没有按菲涅尔分光，能出去就全出去。</li>
+    <li>咬花只打散方向、不吸收能量，真实咬花会有散射/反射损失。</li>
+    <li>外壳、泡棉、反光片不参与追迹（详见 3.3），它们只影响预检查和文字结论。</li>
+  </ul>
+  <div class="diagram">
+    <svg viewBox="0 0 860 235" role="img" aria-label="光线从 LED 发光面出发，经间隙、入光面折射，在导光柱内传播，最终从出射面或侧壁离开的示意图">
+      <defs>
+        <marker id="ar2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" fill="#0E9F8A"/>
+        </marker>
+        <marker id="ar3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" fill="#D97706"/>
+        </marker>
+      </defs>
+      <g font-family="Microsoft YaHei, Segoe UI, sans-serif" font-size="12.5">
+        <rect x="18" y="86" width="106" height="54" rx="8" fill="#E3F4F0" stroke="#0E9F8A"/>
+        <text x="71" y="108" text-anchor="middle" fill="#0B8471" font-weight="700">LED 发光面</text>
+        <text x="71" y="127" text-anchor="middle" fill="#64748B" font-size="11.5">随机撒点</text>
+
+        <rect x="290" y="52" width="330" height="128" rx="10" fill="#F8FCFB" stroke="#94A3B8"/>
+        <text x="455" y="76" text-anchor="middle" fill="#0A1628" font-weight="700">导光柱（材料内部）</text>
+
+        <line x1="124" y1="113" x2="286" y2="113" stroke="#0E9F8A" stroke-width="1.8" marker-end="url(#ar2)"/>
+        <text x="205" y="103" text-anchor="middle" fill="#0B8471" font-size="11.5">空气 gap</text>
+
+        <line x1="290" y1="89" x2="290" y2="143" stroke="#0E9F8A" stroke-width="4"/>
+        <text x="290" y="170" text-anchor="middle" fill="#0B8471" font-size="11.5">入光面折射</text>
+
+        <path d="M300,113 L390,98 L470,126 L560,104 L616,112" fill="none" stroke="#4B0082" stroke-width="1.8"/>
+        <circle cx="390" cy="98" r="3" fill="#4B0082"/>
+        <circle cx="470" cy="126" r="3" fill="#4B0082"/>
+        <text x="430" y="150" text-anchor="middle" fill="#4B0082" font-size="11.5">吸收 + 全反射 + 体散射</text>
+
+        <line x1="620" y1="112" x2="704" y2="112" stroke="#DC143C" stroke-width="1.8" marker-end="url(#ar2)"/>
+        <text x="662" y="102" text-anchor="middle" fill="#B01030" font-size="11.5">出射光</text>
+
+        <path d="M470,126 L500,180" fill="none" stroke="#D97706" stroke-width="1.8" marker-end="url(#ar3)"/>
+        <text x="540" y="194" text-anchor="middle" fill="#B45309" font-size="11.5">侧壁漏光 / 串光</text>
+
+        <text x="732" y="108" fill="#64748B" font-size="11.5">进入光斑统计</text>
+        <text x="732" y="126" fill="#64748B" font-size="11.5">或记为侧漏</text>
+      </g>
+    </svg>
+    <div class="cap">图 2　一条光线的典型路径：发光面 → 空气间隙 → 入光面折射 → 体内反射/散射 → 出射或侧漏。</div>
+  </div>
+</div>
+
+<h3 id="s14">1.4　蒙特卡洛与光线数量：结果是统计值</h3>
+<div class="card">
+  <p>引擎不会“精确复现每一条真实光线”，而是随机撒很多条样本，再统计它们的平均行为。这叫<b>蒙特卡洛</b>方法。样本越多，统计越稳；样本越少，光斑颗粒感越重、指标波动越大。统计误差大致按 <span class="k">1/√N</span> 下降：1000 条时约 ±3%，4000 条时约 ±1.6%，再往上收益越来越小。</p>
+  <h4>快速预览 vs 精确评估（当前代码的实际值）</h4>
+  <table class="compact">
+    <tr><th>项目</th><th>快速预览</th><th>精确评估</th></tr>
+    <tr><td>实际光线数</td><td><span class="k">min(1600, 设定光线数)</span>：设定 1000 时就是 1000；设定 20000 时被压到 1600</td><td>完全按设定的光线数，默认 1000</td></tr>
+    <tr><td>最大反弹次数</td><td><span class="k">min(设定值, 40)</span></td><td>按设定值，默认 30</td></tr>
+    <tr><td>热图网格</td><td>32 × 32</td><td>64 × 64</td></tr>
+    <tr><td>3D 光路最多画多少条</td><td>500</td><td>800</td></tr>
+    <tr><td>适合</td><td>看光路走向、光斑大概形态、快速试参数</td><td>看指标、做判定、出报告、做方案对比</td></tr>
+  </table>
+  <div class="warn"><b>容易误解的一点</b>：快速预览的“1600”是<b>上限</b>，不是固定值。默认光线数就是 1000，所以默认情况下快速预览和精确评估的光线数相同，主要差别在热图网格 32 与 64。只有当你把光线数调到 1600 以上，快速预览才会真正“降采样”。但无论哪种模式，快速预览的出射光斑都按低样本做了自适应平滑，<b>均匀度和判定请以精确评估为准</b>。</div>
+  <p>仿真页的<span class="ui">光线数</span>滑杆范围是 10–20000，右侧数字框最多可填 200000；改动后约 0.7 秒会自动重跑一次。公差扫参的 3 组附加仿真固定用较少的光线（不超过 400 条）和 24 的网格，只用来比较“掉多少”，不用来看细节光斑。</p>
+  <h4>精度与速度的取舍（单独说清楚）</h4>
+  <p><b>速度来自哪里</b>：光线数 × 平均反弹次数，再叠加每颗灯珠的采样。反弹次数越多，长零件远端的光越有机会被统计到，但每条光线也更贵。<b>精度来自哪里</b>：样本量和网格分辨率。样本不够，光斑会有随机亮斑/暗斑，均匀度会忽高忽低；网格太粗，窄亮环会被平均掉。</p>
+  <p><b>怎么选</b>：结构方案还在改、只想确认“光往哪走”的时候，用快速预览，几秒一轮；要写结论、做评审、比较两个方案时，切精确评估，并保持两次的<b>光线数、模式、阈值完全一致</b>，否则差异可能来自设置而不是设计。不要拿快速预览的均匀度去和精确评估的均匀度比，也不要把三位小数当成实验室精度——它只是统计结果的小数位。</p>
+</div>
+
+<h3 id="s15">1.5　材料与 LED 参数在后台怎么绑定</h3>
+<div class="card">
+  <p>界面上你只选“PMMA / PC / 0603 / 标准档”这类工程语言，底层的光学参数由代码里的预设库自动绑定，避免每个人填出不同的 n 和 α。</p>
+  <h4>材料库 → 引擎参数</h4>
+  <table class="compact">
+    <tr><th>材料库选项</th><th>折射率 n</th><th>吸收 α（1/mm）</th><th>阿贝数 Vd</th><th>默认匀光档</th></tr>
+    <tr><td>PMMA 亚克力（默认）</td><td>1.49</td><td>0.0005</td><td>57.4</td><td>不加粉</td></tr>
+    <tr><td>PC 聚碳酸酯（耐温）</td><td>1.586</td><td>0.002</td><td>30.0</td><td>不加粉</td></tr>
+    <tr><td>PC + 扩散粉（匀光）</td><td>1.586</td><td>0.002</td><td>30.0</td><td>中匀光（若匀光档当前仍是“不加粉”）</td></tr>
+    <tr><td>MS 树脂</td><td>1.59</td><td>0.0015</td><td>30.9</td><td>不加粉</td></tr>
+  </table>
+  <p>“阿贝数”是色散强弱的指标，数值越小色散越明显；它只在项目里开启多波长光谱时才参与计算，常规单波长仿真用不到，保持默认即可。材料卡片下方还有一个折叠的“自定义”，可以手填 n、α、Vd；α 的输入上限是 0.01，填太大光线会在柱内很快消失。</p>
+  <h4>扩散粉档位 → 体散射系数 μs</h4>
+  <table class="compact">
+    <tr><th>匀光档</th><th>μs（1/mm）</th><th>直观效果</th></tr>
+    <tr><td>不加粉（纯透光）</td><td>0</td><td>最亮，但中心亮、边缘暗</td></tr>
+    <tr><td>弱匀光</td><td>0.01</td><td>光斑稍饱满，亮度损失小</td></tr>
+    <tr><td>中匀光</td><td>0.04</td><td>常用折中，明暗对比明显降低，但侧漏增加</td></tr>
+    <tr><td>强匀光</td><td>0.10</td><td>最均匀，但总出射最低、侧漏最多</td></tr>
+  </table>
+  <h4>LED 型号库 → 灯珠尺寸与光源光通量</h4>
+  <table class="compact">
+    <tr><th>型号</th><th>发光面 L×W（mm）</th><th>本体高 H（mm）</th><th>典型光通量（lm）</th></tr>
+    <tr><td>0402</td><td>1.0 × 0.5</td><td>0.6</td><td>5</td></tr>
+    <tr><td>0603</td><td>1.6 × 0.8</td><td>0.8</td><td>10</td></tr>
+    <tr><td>2835</td><td>3.5 × 2.8</td><td>0.8</td><td>40</td></tr>
+    <tr><td>3528</td><td>3.5 × 2.8</td><td>1.9</td><td>30</td></tr>
+    <tr><td>TOP 指示灯</td><td>3.0 × 3.0</td><td>1.2</td><td>60</td></tr>
+    <tr><td>侧发光 LED</td><td>3.0 × 1.0</td><td>1.4</td><td>25</td></tr>
+  </table>
+  <p>选中型号后，长、宽、高自动回填到灯珠卡片；“亮度档位”再乘一个系数：低亮 0.6、标准 1.0、高亮 1.6。<b>型号的典型光通量 × 档位系数</b>会写进光源的总光通量，后续“总出光亮度（lm）”和能量归一化都用它。换句话说，换型号/换档位不只改形状，也改了整个能量基准。</p>
+  <p>装配间隙只有一处输入，保存时同时写入灯珠间距；X/Y 偏移只改灯珠位姿，不改导光柱网格。材料、灯珠、间隙、偏移改动后都需要<b>重新跑仿真</b>，旧记录不会自动更新。</p>
+</div>
+
+<h3 id="s16">1.6　出射端光斑与照度怎么统计</h3>
+<div class="card">
+  <p>每条光线从出射面成功折射出去时，引擎会记录：命中点坐标、离开前的剩余强度（0–1）、入射方向、折射后的方向，以及（多波长时）波长。这些命中点就是后续所有统计的原料。</p>
+  <h4>热图：把端面切成格子</h4>
+  <p>先算一个“出射面基准”：把所有出射面的中心按面积加权，得到基准点；法向也按面积加权，得到基准朝向。然后在基准面上建一个二维坐标，把所有命中点投影上去，按 2% 的边距留白后切成 <b>32×32（快速）或 64×64（精确）</b> 的格子。</p>
+  <p>每个格子做两件事：把落进来的光强<b>累加</b>，并记录<b>命中次数</b>。最后用“累加强度 ÷ 命中次数”作为这个格子的代表值。这样做的意思是“这个格子平均有多亮”，而不是“这个格子总共收到多少光”，避免一个格子因为命中多就显得特别亮。</p>
+  <div class="tip"><b>只有“有光的格子”参与统计</b>。没有命中的空格子既不参与平均，也不参与最暗值。好处是不会被大片黑区拉低均匀度；代价是<b>光斑只覆盖端面一小块时，均匀度可能看起来很好</b>。所以看均匀度一定要同时看热图形态和“达标面积比例”。</div>
+  <h4>几个指标的口径</h4>
+  <table class="compact">
+    <tr><th>指标</th><th>怎么算</th><th>怎么读</th></tr>
+    <tr><td>平均出光强度</td><td>所有有光格子的平均值</td><td>0–1 的相对值，不是 lux；用于方案横向比较</td></tr>
+    <tr><td>出光均匀性 Emin/Eavg</td><td>最暗格子 ÷ 平均格子</td><td>越接近 1 越匀；0.7 表示最暗处是平均值的 70%</td></tr>
+    <tr><td>变异系数 CV</td><td>标准差 ÷ 平均值</td><td>越小越稳；0.2 以内算比较均匀，0.35 以上明暗差明显</td></tr>
+    <tr><td>达标面积比例</td><td>强度 ≥ 阈值 × 平均值的格子数 ÷ 有光格子数</td><td>默认阈值 0.8；结果页滑杆可在 0.5–1.0 之间调</td></tr>
+    <tr><td>最亮点亮度</td><td>最亮格子的平均强度</td><td>看局部过亮/亮斑，绝对值受采样影响</td></tr>
+    <tr><td>总出光亮度</td><td>光源光通量 × 进光利用率</td><td>单位 lm，是估算值，不是实测光通量</td></tr>
+  </table>
+  <h4>配光角分布与沿轴侧壁分布</h4>
+  <p><b>配光曲线</b>把每条出射/侧漏光线的方向，相对出射面法线取夹角（0° 表示正前方），按 <b>2° 一档</b>分箱，统计每个角度区间的能量。曲线越窄，准直性越好；越宽，光越散。</p>
+  <p><b>沿轴向侧壁出光分布</b>只统计从侧壁离开的光线，沿模型包围盒<b>最长的那一维</b>切成 64 段，看能量沿长度怎么分布。它主要用来找“哪一段侧壁漏得厉害”，不是端面亮度。</p>
+  <h4>能量账本</h4>
+  <p>所有光线最终会被分到四类：<b>出射端输出、侧面出光、介质吸收、残留/未出</b>。四项相加作为分母，画成一条堆叠条。它回答的是“光都去哪了”，比单看亮度更能定位问题：出射低但吸收也低，多半是侧漏；吸收高，多半是材料 α 或长度问题。</p>
+  <h4>光斑页的显示口径</h4>
+  <p>结果分析里的光斑探测面固定在出射端端面上（d=0，不可调），指标网格固定 64×64；屏幕上的云图用 256×256 的显示网格渲染，但<b>数值计算仍以 64 网格为准</b>。光斑会按样本数做自适应平滑：以 2000 条为参考，样本越少高斯核越宽（最多展宽 3 倍），达到 2000 条及以上不再展宽。所以光斑“看起来”和“算出来”是同一批数据，但光线很少时形态只能看趋势，均匀度和判定请以精确评估为准。</p>
+</div>
+
+<h3 id="s17">1.7　结论怎么来：阈值、判定与公差</h3>
+<div class="card">
+  <p>结果分析顶部的结论卡不是“AI 评价”，而是一组固定阈值 + 你勾选的评估目标。只有模型配置页<span class="ui">仿真评估目标</span>里勾选的项目，才会出现在结论里；没勾选就不输出，避免堆一堆看不懂的图。</p>
+  <table class="compact">
+    <tr><th>评估项</th><th>判定口径</th><th>等级</th></tr>
+    <tr><td>出光亮度</td><td>进光利用率（出射能量 ÷ 总能量）</td><td>≥30% 满足；18%–30% 风险；&lt;18% 不满足</td></tr>
+    <tr><td>出光均匀性</td><td>端面热图的 Emin/Eavg</td><td>≥0.70 满足；0.50–0.70 有明暗斑风险；&lt;0.50 视为明显暗斑</td></tr>
+    <tr><td>变异系数 CV</td><td>热图标准差 ÷ 平均值</td><td>≤0.20 满足；≤0.35 风险；&gt;0.35 不满足（在“光学细节”里看）</td></tr>
+    <tr><td>达标面积</td><td>强度 ≥ 阈值 × 平均值的格子占比</td><td>≥90% 满足；≥70% 风险；&lt;70% 不满足</td></tr>
+    <tr><td>侧壁漏光</td><td>1 − 进光利用率；<b>仅多灯珠或多根导光柱时判</b></td><td>≤5% 可接受；≤15% 风险；&gt;15% 严重</td></tr>
+    <tr><td>装配公差</td><td>公差扫参里最差一档的亮度衰减</td><td>≤30% 可接受；&gt;30% 风险</td></tr>
+    <tr><td>端面光斑均匀性</td><td>光斑页的端面均匀度</td><td>≥0.70 均匀；0.50–0.70 基本均匀；&lt;0.50 不均匀</td></tr>
+  </table>
+  <p><b>达标阈值</b>默认 0.8，可在结果分析左栏拖到 0.5–1.0。它只影响“达标面积比例”这一项，不会改变均匀度、CV、最亮点等其它指标。阈值调高，达标面积自然变小，这是口径变化，不是设计变差。</p>
+  <p class="tip"><b>“漏光”是工程粗口径</b>：结论里的漏光 = 1 − 进光利用率，严格说把材料吸收和残留也算进去了。要区分“真的从侧壁跑掉”还是“被材料吃掉”，请看仿真结果卡里的能量账本（侧面出光 vs 介质吸收）。</p>
+  <h4>“明显暗斑”为什么不展开说</h4>
+  <p>当均匀性低于 0.50 时，结论区不会展开这条文字和改模建议（代码里主动跳过），只保留徽标与其它能判的项目。这是为了避免在光斑已经很差时还给出一条局部、可能误导的优化话术。此时正确动作是直接看热图和侧壁分布，判断是入光耦合、扩散不足还是结构漏光。</p>
+  <h4>公差扫参怎么算</h4>
+  <p>主仿真完成后，如果<span class="ui">公差扫参</span>是勾选状态且 LED 已启用，软件会额外跑 3 组：把导光柱相对灯珠沿 X 方向分别平移 <b>0.1 / 0.2 / 0.3 mm</b>，每组不超过 400 条光线、24 网格，记录平均出光强度，再和基准值比，得到“亮度衰减 %”。结果页画成曲线，红线是 30% 的经验上限；报告里会给一句 CTQ 建议：在哪个偏移以内衰减仍小于 30%。</p>
+  <div class="warn"><b>结论的边界</b>：这是<b>统计意义上的工程判断</b>，不是光学实验室的绝对值。它假设材料参数理想、界面无菲涅尔损失、咬花不打折能量、外壳不反光。它最适合回答“A 和 B 谁更好”“偏 0.2 mm 会不会明显变暗”“光斑是不是偏在一侧”；不适合回答“这个灯最终是多少 lux”“客户看着颜色对不对”。涉及规格书数值时，请用实测或专业光学软件复核。</div>
+</div>
+
+<h2 id="ch2">第 2 章　主要使用场景</h2>
+<p>下面 6 个场景覆盖了日常最常见的决策。每个场景都写清楚：什么情况下用、动哪几个真实存在的栏位、看完哪几个结论就能拍板。参数名以界面为准。</p>
+
+<h3 id="s21">2.1　新项目选型：这个结构能不能做</h3>
+<div class="card">
+  <p><b>什么时候用</b>：客户给了外观/空间限制，手上只有一版初步结构，想知道“导光柱能不能把光送到面板、大概多亮多匀”。</p>
+  <p><b>用哪些栏位</b>：<span class="ui">文件导入</span>（STL/OBJ/STEP）→ <span class="ui">材料库</span>（先用 PMMA）→ <span class="ui">LED 灯珠选型库</span>（选实际封装，如 0603，亮度档先用“标准”）→ <span class="ui">装配间隙</span>（先按 0.5–1.0 mm 的常见区间）→ 仿真页<span class="ui">端面设定</span>（自动检测或手动拾取入射/出射面）→ <span class="ui">快速预览</span> 看光路 → <span class="ui">精确评估</span> 出指标。</p>
+  <p><b>看完什么能决策</b>：先看 3D 光路是不是按预期从入光面进、从出射面出；再看<span class="ui">进光利用率</span>是否 ≥30%、<span class="ui">出光均匀性</span>是否 ≥0.70、<span class="ui">达标面积</span>是否 ≥90%。三项都过，结构可以进入打样；亮度过但均匀度不过，优先加扩散粉或改咬花；亮度不过，先加大入光面/缩短光程/换高亮档。</p>
+  <p><b>注意</b>：首轮不要纠结小数点后三位，先看等级和热图形态；确认方向后，再用精确评估 + 固定光线数做正式记录。</p>
+</div>
+
+<h3 id="s22">2.2　出光亮度不足：改材料、改长度还是换灯珠</h3>
+<div class="card">
+  <p><b>什么时候用</b>：样品或上一版方案“面板太暗”，需要判断是耦合问题、材料吸收，还是灯珠本身不够亮。</p>
+  <p><b>用哪些栏位</b>：<span class="ui">材料库</span>（PMMA ↔ PC，观察 α 与 n 的影响）、<span class="ui">LED 灯珠选型库</span>的<span class="ui">亮度档位</span>（低亮/标准/高亮）、<span class="ui">装配间隙</span>、仿真页<span class="ui">光线数</span>与<span class="ui">仿真模式</span>。结果页看<span class="ui">进光利用率</span>、<span class="ui">总出光亮度</span>和<span class="ui">能量账本</span>。</p>
+  <p><b>看完什么能决策</b>：能量账本里“介质吸收”占比高 → 换低吸收材料或缩短光程；“侧面出光”占比高 → 先解决漏光/遮光，而不是继续加灯珠；“出射端输出”本身高但总出光 lm 低 → 光源光通量不够，换高亮档或更大封装。间隙从 1.0 收到 0.5 若利用率明显上升，说明装配间隙是主因。</p>
+  <p><b>注意</b>：换灯珠型号会同时改发光面尺寸和光通量，不能只看 lm；大封装塞不进小入光面时，耦合反而更差。每次只改一个变量，记录才可比。</p>
+</div>
+
+<h3 id="s23">2.3　亮暗斑 / 亮环：为什么端面花</h3>
+<div class="card">
+  <p><b>什么时候用</b>：端面出现明显亮斑、暗区、亮环，或者客户投诉“中间一坨亮、边上发灰”。</p>
+  <p><b>用哪些栏位</b>：<span class="ui">材料库</span>里的<span class="ui">匀光（扩散粉）</span>档位；<span class="ui">表面处理与曲面</span>里入射面/出射面/侧面的<span class="ui">咬花/雾面</span>与<span class="ui">散射半角 σ</span>；LED 卡片的<span class="ui">灯珠类型</span>（凹面/凸面）、<span class="ui">长度/宽度</span>与<span class="ui">装配间隙</span>；仿真页的<span class="ui">端面设定</span>（确认入光面没有选错/漏选）。</p>
+  <p><b>看完什么能决策</b>：热图中心亮、边缘暗，且扩散粉为“不加粉” → 升到弱/中匀光，看 CV 是否下降、总出射掉多少；热图出现同心亮环 → 多半是出射面球冠/咬花或灯珠到端面距离造成的，改曲面或间隙再看；亮斑偏在一侧 → 查 LED X/Y 偏移与入光面中心是否对齐；侧壁分布某一段特别高 → 那段结构漏光，先做遮光。</p>
+  <p><b>注意</b>：均匀度和亮度是交换关系。强匀光能把 CV 压下来，但总出射可能只剩很小一部分；是否值得，要结合面板要求的亮度和电池/驱动余量判断。</p>
+</div>
+
+<h3 id="s24">2.4　LED 与入光面的配合公差（XY 偏心 + 间隙）</h3>
+<div class="card">
+  <p><b>什么时候用</b>：结构评审要定 LED 的装配定位方式，或者担心“贴偏一点会不会明显变暗”。</p>
+  <p><b>用哪些栏位</b>：模型配置页 LED 卡片的<span class="ui">X 偏移</span>、<span class="ui">Y 偏移</span>、<span class="ui">装配间隙</span>；仿真页的<span class="ui">公差扫参（自动扫 LED 偏移 0.1 / 0.2 / 0.3 mm）</span>。结果页看<span class="ui">公差-亮度衰减</span>曲线与表格。</p>
+  <p><b>看完什么能决策</b>：如果 0.1 mm 就掉超过 30%，说明耦合对偏位极敏感，必须加定位筋/定位面，或把入光面做大；如果 0.2 mm 仍在 30% 以内，可以把 0.2 mm 作为来料/装配的 CTQ 上限；0.3 mm 才掉一点，说明当前结构有裕量，可以把公差放宽以省成本。报告里的“建议 CTQ”会直接写出可接受的偏移。</p>
+  <p><b>注意</b>：公差扫参是把导光柱相对灯珠平移，等价于灯珠反向偏位；它只扫 X 方向，Y 方向与斜向要用 LED 卡片的 X/Y 偏移手动补看。间隙不在扫参里，需单独改“装配间隙”重跑。</p>
+</div>
+
+<h3 id="s25">2.5　多根导光柱串光 / 漏光</h3>
+<div class="card">
+  <p><b>什么时候用</b>：一个面板上有多个指示灯/多根导光柱并排，出现“这个灯亮到隔壁”“侧壁发亮”“黑壳里仍有光晕”。</p>
+  <p><b>用哪些栏位</b>：Home 里新建多个项目（每个盘一根导光柱，3D 窗口可并排看）；每根导光柱在仿真页用<span class="ui">＋ 增加灯珠</span>配置自己的入射/出射面；模型配置页<span class="ui">周边结构</span>选<span class="ui">黑色塑胶（吸光）</span>或<span class="ui">白色塑胶（反射）</span>，并勾选<span class="ui">增加泡棉遮光圈</span>；<span class="ui">仿真评估目标</span>勾选<span class="ui">侧壁漏光检查</span>、<span class="ui">多灯串光检查</span>。结果页看<span class="ui">进光利用率</span>、结论里的漏光百分比、<span class="ui">沿轴向侧壁出光分布</span>。</p>
+  <p><b>看完什么能决策</b>：多根并排时漏光 &gt;15% → 必须加隔光筋/遮光泡棉，或改黑壳；5%–15% → 评审时列为风险项，打样验证；单根时软件不判漏光，因为“侧漏”对单根不构成串光。白色壳体在多灯并排时更容易串光，结论会给“加隔光筋”的提示。</p>
+  <p><b>注意</b>：每根导光柱仍是在各自项目里<b>独立追迹</b>，软件不会把 A 柱的光线打进 B 柱；所谓“串光检查”是根据“多灯珠/多项目 + 侧漏比例 + 壳体颜色”给出的规则提示，不是跨零件的真实光路。壳体、泡棉、反光片也只影响预检查和文字结论，<b>不会真的在引擎里反射光线</b>。所以白色壳体的“回光增益”不会体现在亮度里，漏光百分比也偏直接。它适合做风险提示，不适合算白壳能救回多少亮度。</p>
+</div>
+
+<h3 id="s26">2.6　方案评审：把结果变成一份能签字的报告</h3>
+<div class="card">
+  <p><b>什么时候用</b>：NPI/DFM 评审、客户方案确认、开模前冻结结构，需要留下“当时按什么参数算、结论是什么”的记录。</p>
+  <p><b>用哪些栏位</b>：仿真页<span class="ui">精确评估</span> + 需要时勾选<span class="ui">公差扫参</span>；模型配置页把<span class="ui">仿真评估目标</span>按本次评审关注项勾好；报告生成页多选<span class="ui">仿真记录</span>、勾选<span class="ui">包含 3D 截图</span>、模板选<span class="ui">结构评审版（推荐）</span>、语言选<span class="ui">跟随界面</span>；生成后<span class="ui">下载 HTML</span> 或<span class="ui">打印 / PDF</span>。</p>
+  <p><b>看完什么能决策</b>：结构评审版会给项目信息、材料/灯珠/间隙、结构风险清单、光斑图、每条的亮度/均匀度/最亮/总出光、公差建议和一句结论，足够评审签字；光学详细版额外给完整能量账本、轴向/配光曲线和原始指标，给光学工程师备查。报告是自包含 HTML，发给别人也能直接打开。</p>
+  <p><b>注意</b>：报告只引用已保存的仿真记录，改完参数必须重跑才会进新记录；历史记录只存端面热图，光斑的“真彩/逐波长”细节只有最近一次运行才有。</p>
+</div>
+
+<h2 id="ch3">第 3 章　软件各栏位功能介绍</h2>
+<p>这一章按你实际看到的界面顺序走。每个卡片写清楚：是干什么的、填什么、对结果有什么影响、什么时候用默认值就行。所有默认值来自当前代码；如果你改过项目或导入过旧项目，以界面显示为准。</p>
+
+<h3 id="s31">3.1　顶部导航、全局 3D 主窗口与多盘</h3>
+<div class="card">
+  <h4>顶部导航</h4>
+  <p>顶部有 <b>5 个页面链接</b>：<span class="ui">Home</span>、<span class="ui">模型配置</span>、<span class="ui">仿真计算</span>、<span class="ui">结果分析</span>、<span class="ui">报告生成</span>。右侧还有一个同样样式的 <span class="ui">选项</span> 按钮（打开设置弹窗，不是独立页面），以及 <span class="ui">简中 / EN</span> 语言切换。</p>
+  <table class="compact">
+    <tr><th>入口</th><th>主要管什么</th></tr>
+    <tr><td>Home</td><td>项目卡片、新建/导入/导出、打开/重命名/删除</td></tr>
+    <tr><td>模型配置</td><td>文件、材料、表面、LED、周边结构、评估目标</td></tr>
+    <tr><td>仿真计算</td><td>仿真模式、端面设定、光线数、公差扫参、运行与结果摘要</td></tr>
+    <tr><td>结果分析</td><td>结论、光斑、指标、热图、公差衰减、光学细节</td></tr>
+    <tr><td>报告生成</td><td>选记录、选模板、生成/下载/打印、任务历史</td></tr>
+  </table>
+  <h4>3D 主窗口的通用操作</h4>
+  <ul>
+    <li><b>视角</b>：左键拖动旋转，滚轮缩放，右键拖动平移；左下角有 X/Y/Z 小坐标轴，红=X、绿=Y、蓝=Z。</li>
+    <li><b>选中零件</b>：在 3D 里单击零件，出现选中高亮和底部居中的操作工具条 <span class="ui">移动 / 旋转 / 放置</span>。移动是拖红/绿/蓝箭头或直接填 Pos；旋转是拖圆环绕轴转（按 45° 吸附）；放置是点零件透明面再点盘面贴合。</li>
+    <li><b>删除零件</b>：选中后按 <span class="k">Delete</span> 或 <span class="k">Backspace</span>，只移除这个零件网格，<b>盘和参数保留</b>。</li>
+    <li><b>盘面工具条（左上角）</b>：<span class="ui">＋ 新建盘</span> 和“共 N 盘”。一个盘就是一个项目，3D 窗口里每行 4 块并排；当前盘固定在原点、盘面更深、带青色边框，其它盘按网格排在旁边，用简化示意零件显示。</li>
+    <li><b>切换盘</b>：直接点另一块盘面即可切换项目；切过去后模型配置页显示的是那个盘的项目。</li>
+    <li><b>盘上的 4 个快捷按钮</b>（当前盘右侧）：<span class="ui">删除</span>（删盘及盘上的零件，至少保留一个盘）、<span class="ui">朝向</span>（绕 X/Y/Z 各 +90°、翻转 180°、重置）、<span class="ui">锁定/解锁</span>（锁定后参数与删除冻结，按钮置灰）、<span class="ui">层级</span>（上移一位/下移一位/置顶/置底）。</li>
+    <li><b>生成几何 + 预检查（右下角）</b>：主按钮，跑结构预检查并弹出“结构预审结果”。对导入模型，它<b>不会重新生成几何</b>，只按当前参数做规则检查；几何本身以导入的网格为准。</li>
+  </ul>
+  <div class="tip">预检查看的是“规则”不是“测量”：入光面是否小于 LED 发光面、两端直径比、长径比、拔模/壳体组合等。它读取项目里的名义尺寸，导入模型的真实尺寸不会自动反推，所以结果只作提示，<b>不能替代仿真</b>。</div>
+</div>
+
+<h3 id="s32">3.2　Home 启动页</h3>
+<div class="card">
+  <p>启动即进入 Home，以卡片列出所有项目。顶部工具条三项：<span class="ui">新建项目</span>、<span class="ui">导入文件</span>（.json 项目包）、<span class="ui">全部导出</span>（打包备份所有项目）。</p>
+  <table class="compact">
+    <tr><th>卡片元素</th><th>说明</th></tr>
+    <tr><td>项目名称 / 当前标记</td><td>当前激活项目带“当前”；点击“打开”进入该项目</td></tr>
+    <tr><td>仿真次数</td><td>该项目累计保存的仿真记录条数</td></tr>
+    <tr><td>3D 预览图</td><td>用来快速认项目：没有导入文件时按项目几何渲染一张小预览；已导入 STL/OBJ/STEP 的，Home 不重新解析 CAD，只画简化方块并标出文件名</td></tr>
+    <tr><td>打开 / 重命名 / 导出 / 删除</td><td>导出是单项目 JSON；删除有二次确认；<b>已锁定的项目不可删除</b></td></tr>
+  </table>
+  <p>新建项目会自动生成一个默认项目并进入；项目里保存材料、LED、目标、仿真记录等，但不保存导入的网格文件，所以刷新页面后要重新导入 STL/OBJ/STEP。</p>
+</div>
+
+<h3 id="s33">3.3　模型配置页</h3>
+<p>左栏是 6 张可折叠的一级卡片，顺序是“先给模型、再给材料、再给表面、再给灯珠、再给环境、最后定目标”；右侧是共享的 3D 主窗口。每张卡片标题可点击折叠，顶部有“一键折叠全部参数”。</p>
+
+<h4>3.3.1　文件导入</h4>
+<div class="card">
+  <ul>
+    <li><b>选择文件</b>：支持 <span class="k">.stl</span> / <span class="k">.obj</span> / <span class="k">.step</span> / <span class="k">.stp</span>；导入后卡片显示文件名，底部状态栏提示导入成功及面数，并自动修复网格（焊接重复顶点、统一法线）。</li>
+    <li><b>装配间隙 (mm)</b>：LED 发光面到入光端面的空气距离，范围 0–2，默认 0.1。这是全界面唯一一处间隙输入，保存后会同步到灯珠间距。</li>
+    <li><b>对结果的影响</b>：间隙越大，光线在空气里散得越开，进光利用率通常越低；间隙为 0 相当于贴面发射，量产不现实但可做上限参考。</li>
+    <li><b>什么时候用默认</b>：结构还没定 LED 定位时先用 0.1–0.5 试趋势；正式评审按实际装配链填 0.5–1.0 更接近量产。</li>
+  </ul>
+  <div class="warn"><b>STEP 导入注意</b>：STEP 需要浏览器端 CAD 解析库先把实体转成三角网格；如果内网访问不了外网库地址，STEP 会导入失败。这种情况下请让 CAD 先导出 STL 或 OBJ，再导入。</div>
+</div>
+
+<h4>3.3.2　材料库</h4>
+<div class="card">
+  <p>下拉只有 4 个工程选项：PMMA 亚克力、PC 聚碳酸酯、PC + 扩散粉、MS 树脂。选中后 n、α、Vd 自动绑定，卡片下方的说明文字会告诉你这种料的适用场景。下面单独一个<span class="ui">匀光（扩散粉）</span>下拉：不加粉 / 弱匀光 / 中匀光 / 强匀光，对应体散射系数 0 / 0.01 / 0.04 / 0.10。</p>
+  <p>最下面折叠的“自定义”是给光学人员用的：材料预设、折射率 n、吸收系数 α、阿贝数 Vd。普通结构设计不需要展开；α 输入上限 0.01，别把“吸收”当“透过率”填。</p>
+  <table class="compact">
+    <tr><th>你改什么</th><th>影响什么</th><th>建议</th></tr>
+    <tr><td>PMMA → PC</td><td>n 变大、α 变大：折射更强、长件更暗</td><td>高亮/耐温需求选 PC；通用优先 PMMA</td></tr>
+    <tr><td>PC → PC + 扩散粉</td><td>自动把匀光设为中档（前提是匀光档当前仍为“不加粉”）</td><td>想要“材料自带匀光”时用</td></tr>
+    <tr><td>匀光档位</td><td>均匀度上升、总出射下降、侧漏上升</td><td>先弱/中，强匀光只在均匀度优先时用</td></tr>
+    <tr><td>自定义 n / α / Vd</td><td>直接改底层光学参数</td><td>只有拿到材料实测数据时才动</td></tr>
+  </table>
+</div>
+
+<h4>3.3.3　表面处理与曲面</h4>
+<div class="card">
+  <p>按三组面分别设置：<span class="ui">入射面（LED 侧）</span>、<span class="ui">出射面</span>、<span class="ui">侧面（侧壁）</span>。每组有<span class="ui">咬花/雾面</span>下拉和<span class="ui">散射半角 σ (°)</span>：镜面 0°、细雾面 2°、中雾面 5°、粗雾面/咬花 10°，也可以选“自定义 σ”手填（0–25）。</p>
+  <p>入射面、出射面还各有<span class="ui">端面曲面</span>（平面 / 凸面球冠 / 凹面球冠）和<span class="ui">曲率半径 R</span>；侧面有<span class="ui">侧面轮廓</span>（直线 / 鼓形 / 收腰）和<span class="ui">鼓出量 Δr</span>。</p>
+  <div class="warn"><b>重要</b>：端面曲面、侧面轮廓、鼓出量只对软件内部生成的几何有效。当前流程用的是导入模型，模型形状已经固定在网格里，<b>改这几项不会改变模型</b>，日常保持“平面 / 直线 / 默认值”即可。真正对导入模型生效的是<b>咬花/雾面 σ</b>。</div>
+  <table class="compact">
+    <tr><th>参数</th><th>对结果的影响</th><th>建议</th></tr>
+    <tr><td>入射面 σ</td><td>打散入光方向，可能改善耦合均匀性，也可能增加入光损失</td><td>一般保持镜面；入光面有雾面工艺时按实际填</td></tr>
+    <tr><td>出射面 σ</td><td>出光更柔和，亮暗过渡更自然</td><td>有咬花就填细/中雾面，别默认镜面</td></tr>
+    <tr><td>侧面 σ</td><td>侧壁散射增强，侧漏更明显</td><td>需要侧发光时调；要防漏光时保持镜面</td></tr>
+    <tr><td>曲面 / 轮廓 / Δr</td><td>对导入模型不生效</td><td>保持默认</td></tr>
+  </table>
+</div>
+
+<h4>3.3.4　LED 灯珠选型库</h4>
+<div class="card">
+  <p>这是一级卡片，<b>新项目默认启用</b>。卡片内从上到下：</p>
+  <ul>
+    <li><span class="ui">启用 LED 灯珠</span>：勾选后光线从灯珠发光面发射；取消则退回端面光源。</li>
+    <li><span class="ui">LED 灯珠选型库</span>：无 LED / 0402 / 0603 / 2835 / 3528 / TOP 指示灯 / 侧发光 LED。选中后自动回填长、宽、高和典型光通量。</li>
+    <li><span class="ui">亮度档位</span>：低亮（省电）/ 标准 / 高亮，对应光通量系数 0.6 / 1.0 / 1.6。</li>
+    <li><span class="ui">X 偏移 / Y 偏移</span>：装配偏心，−2～2 mm；只平移灯珠，导光柱不动，3D 显示同步。</li>
+    <li><span class="ui">灯珠类型</span>：矩形 / 正方形 / 圆柱形半球型凹面 / 圆柱半球型凸面；正方形时宽度自动等于长度，凹/凸面才出现深度/半径。</li>
+    <li><span class="ui">长度 L / 宽度 W / 高度 H</span>：发光面和本体尺寸；凹面还有<span class="ui">凹面深度</span>，凸面还有<span class="ui">凸面半径 R</span>。</li>
+  </ul>
+  <table class="compact">
+    <tr><th>参数</th><th>对结果的影响</th><th>建议 / 默认</th></tr>
+    <tr><td>灯珠型号</td><td>同时改发光面尺寸、本体高度、光通量</td><td>按实际 BOM 选，别用默认值代替选型</td></tr>
+    <tr><td>亮度档</td><td>线性缩放总光通量，影响绝对亮度和 lm</td><td>先“标准”，方案对比时固定档位</td></tr>
+    <tr><td>X/Y 偏移</td><td>光束偏进入光面，亮度下降、光斑偏移</td><td>做公差分析时填 0.1/0.2/0.3</td></tr>
+    <tr><td>发光面 L×W</td><td>发光面越大，入光面接收越满，但边缘光更难耦合</td><td>与灯珠规格书一致</td></tr>
+    <tr><td>凹面深度</td><td>越深聚光越强，中心更亮</td><td>0.3–0.5 mm（按实际灯珠）</td></tr>
+    <tr><td>凸面半径</td><td>半径越小，出射越发散</td><td>R0.5–1.0 mm（按实际灯珠）</td></tr>
+    <tr><td>装配间隙</td><td>见 3.3.1，只在此处填一次</td><td>0.5–1.0 mm；量产最小约 0.3 mm</td></tr>
+  </table>
+  <p>LED 启用后，光线沿发光面均匀采样，方向绕发光面的局部法线按朗伯分布（默认）铺开；凹面/凸面的法线沿曲面走，所以灯珠形状本身就带聚光/扩散效果。当前界面不提供光源类型/发散角的单独输入，常规保持默认即可。</p>
+</div>
+
+<h4>3.3.5　边界 &amp; 周边结构</h4>
+<div class="card">
+  <p>三项：<span class="ui">周边壳体</span>（黑色塑胶吸光 / 白色塑胶反射）、<span class="ui">增加泡棉遮光圈（防漏光）</span>（默认勾选）、<span class="ui">有反光片 / 麦拉片</span>（默认不勾）。</p>
+  <p><b>它们不参与光线追迹</b>：引擎里没有壳体内壁、泡棉、反光片的几何，光线打到模型边界就按出射/侧漏处理。这三项的作用是：让预检查给出“黑壳+无泡棉，侧漏风险高”“白壳多灯易串光”的提示，并把配置写进报告的项目信息。</p>
+  <table class="compact">
+    <tr><th>选项</th><th>实际作用</th><th>什么时候用默认</th></tr>
+    <tr><td>黑色塑胶</td><td>预检查在“多灯/多柱 + 无泡棉”时提示漏光风险</td><td>大多数指示灯结构默认黑壳</td></tr>
+    <tr><td>白色塑胶</td><td>预检查在多灯并排时提示串光；不计算回光增益</td><td>需要白壳回光时才选，别指望它变亮</td></tr>
+    <tr><td>泡棉遮光圈</td><td>消掉“黑壳无泡棉”的漏光提示</td><td>有遮光泡棉就保持勾选</td></tr>
+    <tr><td>反光片</td><td>仅作为报告信息记录</td><td>没有就不勾</td></tr>
+  </table>
+</div>
+
+<h4>3.3.6　仿真评估目标</h4>
+<div class="card">
+  <p>7 个勾选项决定结果页“结论卡”输出哪些条目：<span class="ui">出光亮度是否达标</span>、<span class="ui">出光均匀性（有无明暗斑）</span>、<span class="ui">侧壁漏光检查</span>、<span class="ui">装配公差敏感度</span>、<span class="ui">折弯 / 拐角光损</span>、<span class="ui">多灯串光检查</span>、<span class="ui">开模风险提示</span>。</p>
+  <p>默认勾选：亮度、均匀性、漏光、公差、开模风险；折弯光损与多灯串光默认不勾，因为不是每个项目都有折弯/多灯。勾得越多，结论越长；只勾本次评审关心的，读起来更清楚。</p>
+</div>
+
+<h4>3.3.7　3D 拾取、删除与预检查</h4>
+<div class="card">
+  <p>面拾取不在模型页，而在<span class="ui">仿真计算 → 端面设定</span>：点“拾取→入射端”或“拾取→出射端”，再在 3D 里单击表面。单击会自动扩展整片相连区域；相切交界按曲率类型分开（例如穹顶与圆柱侧壁分开），尖锐边会阻断。<span class="k">Shift + 单击</span> 累加多片，再次单击已选中的面可取消；<span class="k">Esc</span> 或再点拾取按钮退出。入射面显示蓝色、出射面显示黄色。</p>
+  <p>选中零件后按 <span class="k">Delete/Backspace</span> 可删除零件网格，盘和参数保留；删除后需要重新导入才能再算。</p>
+  <p><span class="ui">生成几何 + 预检查</span> 在 3D 窗口右下角，点击后弹“结构预审结果”，列出通过项与风险项。它适合在正式仿真前做一次“结构常识检查”，例如入光面比 LED 发光面还小、长径比过大、黑壳没泡棉等；风险项不是判决，仍以仿真结果为准。</p>
+</div>
+
+<h3 id="s34">3.4　仿真计算页</h3>
+<div class="card">
+  <h4>仿真模式卡片</h4>
+  <ul>
+    <li><span class="ui">快速预览 / 精确评估</span>：切换后提示文字会变。快速预览限制光线上限与网格；精确评估用完整设置。选择会记在浏览器本地，下次打开保持。</li>
+    <li><span class="ui">公差扫参（自动扫 LED 偏移 0.1 / 0.2 / 0.3 mm）</span>：默认勾选；只有 LED 启用时才会真的跑 3 组附加仿真，否则提示先启用灯珠。</li>
+    <li><span class="ui">开始仿真</span>：运行按钮，下方出现进度条与“仿真中… 已完成/总数”。</li>
+  </ul>
+  <h4>端面设定卡片</h4>
+  <ul>
+    <li>每颗灯珠一组：<span class="ui">灯珠 #1</span> 的<span class="ui">入射端</span>、<span class="ui">出射端</span>，显示已选面数；<span class="ui">＋ 增加灯珠</span>、<span class="ui">移除</span>。</li>
+    <li><span class="ui">自动检测端面</span>：按几何方向自动找两端；<span class="ui">交换 Input/Output</span>；<span class="ui">清除端面</span>。</li>
+    <li>拾取按钮在每个灯珠行内；操作规则见 3.3.7。底部状态行显示 Input/Output 面数。</li>
+  </ul>
+  <h4>高级设置（光学工程师）</h4>
+  <p>默认折叠。里面是<span class="ui">光线数</span>滑杆（10–20000）+ 数字框（最多 200000），以及<span class="ui">出射端面光斑（3D 预览）</span>勾选（默认开）。光斑探测屏固定在出射端端面（d=0），网格固定 64×64，和结果页、报告同口径，不可调。改光线数后约 0.7 秒会自动重跑一次。</p>
+  <h4>右侧 3D 与结果</h4>
+  <p>运行时会显示光路：<b>红色 = 成功从出射端出去</b>，<b>紫色 = 在体内传播</b>，<b>橙色 = 从侧壁逃逸</b>；最多画 500 条（快速）或 800 条（精确），但统计始终基于全部光线。运行结束后右上角出现结果浮动卡：总光线、出射成功、侧面逃逸、反弹耗尽、出射率、平均输出强度、最大反弹次数、耗时、计算档位、预览轨迹条数，以及能量账本四色条。每次运行都会自动存一条项目记录，并抓一张 240×180 的 3D 缩略图。</p>
+</div>
+
+<h3 id="s35">3.5　结果分析页</h3>
+<div class="card">
+  <h4>左栏三个小卡片</h4>
+  <ul>
+    <li><span class="ui">数据来源</span>：默认“最近一次运行”，也可以选历史仿真记录。历史记录只有端面热图，没有原始光线，所以光斑页会退回伪彩云图。</li>
+    <li><span class="ui">达标阈值（×均值）</span>：默认 0.80，范围 0.50–1.00，步长 0.05。只影响“达标面积比例”，不影响均匀度/CV。</li>
+    <li><span class="ui">仿真 vs 实测</span>：选一条实测记录，和当前仿真的平均强度、均匀度、CV 做对比，给偏差百分比。当前界面没有录入实测的入口，只有项目 JSON 里自带 measurements 时才有可选项。</li>
+  </ul>
+  <h4>右栏从上到下</h4>
+  <ul>
+    <li><b>结论卡</b>：徽标“满足 / 风险 / 不满足”，逐条列出已勾选目标的判定与一句建议；没勾任何目标时提示去模型配置勾选。</li>
+    <li><b>出射端面光斑</b>：伪彩（彩虹环）/ 真彩合成 / 逐 λ 分离三种显示模式；可“导出云图 PNG”；鼠标悬停读该点数值；下方还有本次 3D 截图。常规单波长项目用伪彩即可。</li>
+    <li><b>四个指标卡</b>：LED 进光利用率、出光均匀性（端面热图）、最亮点亮度、总出光亮度；带目标区间条，颜色表示等级。鼠标悬停可看光学原始定义。</li>
+    <li><b>出射端面照度分布</b>：热图，▲标热点（&gt;1.5×均值），●标暗区（&lt;0.3×均值），白色等值线在均值附近。</li>
+    <li><b>公差-亮度衰减</b>：曲线 + 表格（偏移、平均出光强度、衰减 %），红线为 30% 经验上限。没做扫参时提示去仿真页勾选重跑。</li>
+    <li><b>光学细节（供光学工程师）</b>：折叠区，里面有旧的综合评级（均匀性/CV/达标面积），以及<span class="ui">沿轴向侧壁出光分布</span>和<span class="ui">配光曲线</span>，各带自动解读和均值参考线。</li>
+  </ul>
+  <div class="tip">如果模型、光源或材料改过但没重跑，页面会提示“结果可能已过期”。看到这条提示，先回仿真页重跑，不要继续用旧结论做判断。</div>
+</div>
+
+<h3 id="s36">3.6　报告生成页</h3>
+<div class="card">
+  <p>左侧<span class="ui">报告选项</span>：</p>
+  <ul>
+    <li><span class="ui">选择仿真记录（可多选）</span>：勾哪几条就写哪几条，按勾选顺序编号 #1、#2…</li>
+    <li><span class="ui">包含 3D 截图</span>：把运行时的 3D 缩略图放进报告。</li>
+    <li><span class="ui">报告模板</span>：<span class="ui">结构评审版（推荐）</span> / <span class="ui">光学详细版</span>。</li>
+    <li><span class="ui">报告语言</span>：跟随界面 / 简体中文 / English。</li>
+    <li><span class="ui">生成 / 预览</span>：在右侧 iframe 里生成自包含 HTML；生成后<span class="ui">下载 HTML</span>、<span class="ui">打印 / PDF</span> 才可用。</li>
+  </ul>
+  <table class="compact">
+    <tr><th>模板</th><th>包含什么</th><th>给谁看</th></tr>
+    <tr><td>结构评审版</td><td>项目信息（几何/材料/光源/LED/间隙/材料库/壳体）、结构风险清单、光斑图、每条记录的亮度/均匀度/最亮点/总出光、公差建议与 CTQ、一句结论</td><td>结构、NPI、DFM 评审</td></tr>
+    <tr><td>光学详细版</td><td>项目信息、光斑、能量账本、完整仿真指标、热图/轴向/配光图、结论</td><td>光学工程师备查</td></tr>
+  </table>
+  <p>页面底部<span class="ui">任务历史</span>列出已完成的仿真任务（缩略图、光线数、出射率、耗时），可单条删除或<span class="ui">全部清除</span>，删除前有确认。历史只保存记录本身，删了不会影响项目参数。</p>
+  <div class="tip">报告里的光斑固定取“最近一次仿真”的出射光线，和结果页同口径；如果最近一次是快速预览，报告里的光斑也会是低样本数据，正式评审建议先用精确评估重跑。</div>
+</div>
+
+<h3 id="s37">3.7　项目管理、记录与选项</h3>
+<div class="card">
+  <h4>项目与记录</h4>
+  <ul>
+    <li><b>切换项目</b>：Home 卡片“打开”，或 3D 窗口点另一块盘。</li>
+    <li><b>重命名 / 删除</b>：Home 卡片按钮；删除有确认，锁定项目不可删。删盘也会删掉盘上的零件配置，至少保留一个盘。</li>
+    <li><b>导出 / 导入 JSON</b>：单项目导出、全部导出；导入 .json 可一次带回多个项目。</li>
+    <li><b>仿真记录</b>：每次运行自动追加，包含参数快照、摘要、能量账本、聚合结果、公差表、3D 缩略图。结果分析的数据源和报告的记录多选都读它。</li>
+    <li><b>实测数据</b>：数据结构里有 measurements，但当前界面没有“添加实测/导入 CSV”的入口；只有导入的项目 JSON 自带实测记录时，“仿真 vs 实测”才有得选。</li>
+  </ul>
+  <h4>顶栏“选项”</h4>
+  <p>弹窗里可以：按 6 张卡片分别显示/隐藏模型配置页的卡片（文件导入、材料库、表面处理、LED 灯珠、周边结构、评估目标）；开关参数旁的 <span class="k">?</span> 帮助提示；打开使用说明。设置存在浏览器本地，换电脑不跟随。</p>
+  <h4>语言与本地存储</h4>
+  <p>简中/EN 切换只影响界面文案，不影响已有项目数据。项目、记录、偏好都存在浏览器 localStorage 里；清理浏览器数据会丢项目，重要方案请及时导出 JSON。</p>
+</div>
+
+<h2 id="summary">小结：三句话记住这个工具</h2>
+<div class="card">
+  <ol>
+    <li><b>它算的是“光去哪了”</b>：三角面片 + 随机光线 + 折射/全反射/吸收/散射，最后统计出射端的光斑和能量账本。</li>
+    <li><b>它给的是“相对比较”</b>：同一套设置下比方案、比公差、比材料；不要拿 0–1 的相对强度当实验室 lux。</li>
+    <li><b>它最适合“先看趋势，再出报告”</b>：快速预览定方向，精确评估定结论，报告生成留证据；所有阈值和默认值都以界面当前显示为准。</li>
+  </ol>
+  <div class="tip"><b>推荐使用顺序</b>：Home 建项目 → 模型配置导入模型/选材料/选 LED/填间隙 → 仿真计算拾取端面 → 快速预览确认光路 → 精确评估 + 公差扫参 → 结果分析看结论与光斑 → 报告生成选记录出报告。</div>
+</div>
+
+<footer>
+  内部资料 · 面向机构工程师 · 本文所有数值与控件名称以当前代码界面为准
+</footer>
+
+</div>
+</body>
+</html>

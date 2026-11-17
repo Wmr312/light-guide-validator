@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>导光柱光迹模拟工具 — 软件使用说明</title>
+<style>
+  :root {
+    --accent: #0E9F8A; --accent-strong: #0B8471; --accent-soft: #E3F4F0;
+    --ink: #0A1628; --muted: #64748B; --line: #E2E8F0; --bg: #F4F8FB;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; background: var(--bg); color: var(--ink); margin: 0; line-height: 1.75; font-size: 14.5px; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 40px 28px 80px; }
+  header.doc { background: linear-gradient(135deg, var(--accent) 0%, #14B8A6 100%); color: #fff; border-radius: 18px; padding: 34px 36px; margin-bottom: 34px; }
+  header.doc h1 { margin: 0 0 8px; font-size: 27px; letter-spacing: .5px; }
+  header.doc p { margin: 0; opacity: .92; font-size: 14.5px; }
+  .ver { display: inline-block; margin-top: 12px; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35); padding: 3px 12px; border-radius: 999px; font-size: 12.5px; }
+  h2 { font-size: 20px; margin: 40px 0 12px; padding-left: 12px; border-left: 4px solid var(--accent); }
+  h3 { font-size: 15.5px; margin: 24px 0 8px; color: var(--accent-strong); }
+  p { margin: 8px 0; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px; margin: 14px 0; box-shadow: 0 1px 3px rgba(10,22,40,.05); }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; background: #fff; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; white-space: nowrap; background: #FAFCFE; }
+  tr:last-child td { border-bottom: none; }
+  code, .k { font-family: Consolas, Menlo, monospace; background: #EEF3F8; border-radius: 5px; padding: 1px 6px; font-size: 12.5px; color: #0B7285; }
+  .tip { background: var(--accent-soft); border-left: 4px solid var(--accent); border-radius: 8px; padding: 10px 14px; margin: 10px 0; font-size: 13.5px; }
+  .warn { background: #FEF6E6; border-left: 4px solid #D97706; border-radius: 8px; padding: 10px 14px; margin: 10px 0; font-size: 13.5px; }
+  .steps { counter-reset: step; padding-left: 0; list-style: none; margin: 10px 0; }
+  .steps li { counter-increment: step; position: relative; padding: 10px 14px 10px 52px; background: #fff; border: 1px solid var(--line); border-radius: 12px; margin: 8px 0; }
+  .steps li::before { content: counter(step); position: absolute; left: 14px; top: 12px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+  .nav-map { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin: 12px 0; }
+  .nav-map .nm { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .nav-map .nm b { color: var(--accent-strong); display: block; margin-bottom: 4px; font-size: 14.5px; }
+  .nav-map .nm span { font-size: 13px; color: var(--muted); }
+  details { margin: 8px 0; }
+  summary { cursor: pointer; font-weight: 600; color: var(--accent-strong); padding: 6px 0; }
+  footer { margin-top: 60px; color: var(--muted); font-size: 12.5px; text-align: center; }
+  @media print {
+    body { background: #fff; font-size: 12.5px; }
+    .wrap { max-width: none; padding: 0; }
+    header.doc { border-radius: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .card { box-shadow: none; break-inside: avoid; }
+    details { display: block; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>导光柱光迹模拟工具 · 软件使用说明</h1>
+  <p>面向结构工程师的导光柱设计验证工具 — 导入 3D 模型 · LED 灯珠选型 · 光线追踪 · 光斑分析 · 一键报告</p>
+  <span class="ver">适用版本：v3.0 · 文档更新：2026-11-11</span>
+</header>
+
+<h2>一、软件简介</h2>
+<div class="card">
+  <p><b>导光柱光迹模拟工具</b>（light-guide-validator）用于在开模 / 打样之前快速验证导光柱方案的出光效果。导入结构工程师建好的三维模型，选择材料与 LED 灯珠型号，程序用光线追踪（Möller–Trumbore 求交 + Beer-Lambert 吸收 + 能量账本）统计出射端与侧壁的能量分布，给出光斑、均匀性与达标结论，并可一键生成验证报告。</p>
+  <p>典型应用：仪表导光柱、指示灯导光件、按键背光、机箱 / 服务器面板导光等需要在指定区域均匀出光的透明零件。</p>
+  <div class="tip"><b>定位说明</b>：本工具的几何来源统一为<b>导入的三维模型</b>。软件不再提供参数化建模示例，也不提供侧棱镜微齿等附加结构生成 —— 模型长什么样，仿真就按什么样计算，所见即所得。</div>
+</div>
+
+<h2>二、快速上手（六步出结果）</h2>
+<ol class="steps">
+  <li><b>进入 Home 启动页</b> — 新建或打开一个项目。每张项目卡片下方带 3D 预览图，可直接看到是哪个零件。</li>
+  <li><b>导入模型</b> — 进入「模型配置 → 文件导入」，选择 STL / OBJ / STEP 文件；同时设定 LED 与入光面之间的<b>装配间隙</b>。</li>
+  <li><b>选材料与灯珠</b> — 材料选型下拉选 PMMA / PC 等常用料；LED 灯珠选型库选封装型号（如 0603）、亮度档位，如需查看装配偏心可填 X / Y 偏移。</li>
+  <li><b>设定端面</b> — 进入「仿真计算」，点「自动检测端面」，或用拾取按钮手动点选入射面 / 出射面（<b>Shift + 点击</b>可累加多个面）。</li>
+  <li><b>开始计算</b> — 先选「快速预览」看光路走向，确认无误后切「精确评估」出定量结论。</li>
+  <li><b>看结果 / 出报告</b> — 「结果分析」看指标、曲线与出射端面光斑，「报告生成」勾选记录一键出报告。</li>
+</ol>
+<div class="tip">第一次使用？参数标签旁的 <b>?</b> 图标鼠标悬停即可看到含义与建议取值（可在顶栏「选项」中开关）。</div>
+
+<h2>三、界面导航</h2>
+<div class="nav-map">
+  <div class="nm"><b>Home</b><span>项目卡片列表、3D 预览缩略图、新建 / 打开 / 重命名 / 导出 / 删除、JSON 导入导出</span></div>
+  <div class="nm"><b>模型配置</b><span>文件导入、材料选型、表面处理与曲面、LED 灯珠选型库、边界 &amp; 周边结构、仿真评估目标</span></div>
+  <div class="nm"><b>仿真计算</b><span>快速预览 / 精确评估、端面设定（自动检测或手动拾取）、多灯珠、公差扫参、光线可视化</span></div>
+  <div class="nm"><b>结果分析</b><span>达标阈值、关键指标、出射端面光斑（伪彩 / 真彩 / 逐波长）、出射热图、轴向分布、配光曲线、仿真 vs 实测对比</span></div>
+  <div class="nm"><b>报告生成</b><span>勾选仿真记录生成自包含 HTML 报告，支持下载与打印 / PDF</span></div>
+  <div class="nm"><b>选项（顶栏按钮）</b><span>模型配置卡片显隐、参数帮助开关、打开本使用说明</span></div>
+</div>
+
+<h2>四、Home 启动页</h2>
+<div class="card">
+  <p>启动即进入 Home 页，以卡片形式列出全部项目：</p>
+  <table>
+    <tr><th>卡片元素</th><th>说明</th></tr>
+    <tr><td>项目名称</td><td>点击「打开」进入该项目；当前激活项目带「当前」标记</td></tr>
+    <tr><td>仿真次数</td><td>该项目累计运行过的仿真记录条数</td></tr>
+    <tr><td><b>3D 预览图</b></td><td>卡片底部的实物风格缩略图 — 导入过模型的显示模型外观，未导入的显示占位示意，快速辨认零件</td></tr>
+    <tr><td>操作按钮</td><td>打开 / 重命名 / 导出 / 删除（已被锁定的项目不可删除）</td></tr>
+  </table>
+  <p>顶部工具条：<b>新建项目</b>、<b>导入文件</b>（导入 .json 项目包）、<b>全部导出</b>（打包备份所有项目）。</p>
+</div>
+
+<h2>五、模型配置</h2>
+<p>模型配置页共 6 张卡片，自上而下按「先给模型、再给材料、再给灯珠、最后定评估口径」的顺序排列：</p>
+
+<h3>5.1 文件导入</h3>
+<table>
+  <tr><th>项目</th><th>说明</th></tr>
+  <tr><td>支持格式</td><td><code>STL</code> / <code>OBJ</code> / <code>STEP（.stp）</code></td></tr>
+  <tr><td>操作</td><td>点「选择文件」导入；导入成功后卡片内显示文件名</td></tr>
+  <tr><td><b>装配间隙</b></td><td>LED 发光面到入光面的距离 (mm)。建议 0.5–1.0，量产最小 0.3；过大会漏光，过近可能干涉</td></tr>
+  <tr><td>导入后</td><td>需回到「仿真计算」重新设定入射 / 出射端面；灯珠位置自动跟随所选入射面</td></tr>
+</table>
+<div class="warn">浏览器安全限制：文件模型<b>刷新页面后需重新导入</b>。项目里的其他参数、仿真记录不受影响。</div>
+
+<h3>5.2 3D 视图操作（移动 / 旋转 / 放置）</h3>
+<table>
+  <tr><th>操作</th><th>说明</th></tr>
+  <tr><td>选中零件</td><td>在 3D 视图中单击零件，出现边界框并激活工具条（工具条固定在视图顶部）</td></tr>
+  <tr><td><b>移动</b></td><td>拖动红 / 绿 / 蓝轴向箭头平移零件</td></tr>
+  <tr><td><b>旋转</b></td><td>拖动彩色圆环绕对应轴旋转；支持 <b>45° 吸附</b>，也可吸附到米字参考线方向</td></tr>
+  <tr><td><b>放置</b></td><td>点击零件的透明面选定贴合面，再点盘面即可把该面贴合到盘面上</td></tr>
+  <tr><td>视角</td><td>空白处拖拽旋转视角、滚轮缩放；放置模式下不会误触发其它操作</td></tr>
+</table>
+<div class="tip">模型以<b>半透明青绿色</b>显示，便于看清内部光路；入射端面高亮为<b>蓝色</b>、出射端面为<b>黄色</b>（不透明，始终可见）。</div>
+
+<h3>5.3 材料选型</h3>
+<table>
+  <tr><th>参数</th><th>含义</th><th>常见取值</th></tr>
+  <tr><td><code>材料</code></td><td>下拉选择 3C 常用料，折射率 / 损耗由后台绑定</td><td>PMMA / PC / PC 扩散 / MS</td></tr>
+  <tr><td><code>匀光（扩散粉）</code></td><td>决定出射端面的均匀度</td><td>无 / 轻 / 中 / 高</td></tr>
+  <tr><td><code>自定义光学参数</code></td><td>展开后可手工填折射率 n、吸收系数 α 等（进阶）</td><td>结构工程师通常无需改动</td></tr>
+</table>
+
+<h3>5.4 表面处理与曲面</h3>
+<p>按「入射面 / 出射面 / 侧面」三组分别设置：</p>
+<table>
+  <tr><th>参数</th><th>含义</th><th>设置建议</th></tr>
+  <tr><td><code>咬花 / 雾面</code></td><td>表面散射等级，决定出光柔和程度</td><td>镜面（抛光）/ 细雾面 σ≈2° / 中雾面 σ≈5° / 粗雾面 σ≈10°</td></tr>
+  <tr><td><code>端面曲面</code></td><td>端面做成平面 / 凸球冠 / 凹球冠</td><td>凸面聚光、凹面扩散</td></tr>
+  <tr><td><code>侧面轮廓</code></td><td>直线 / 鼓形 / 收腰</td><td>与模型实际轮廓一致时选对应项</td></tr>
+</table>
+<div class="tip"><b>导入模型时</b>：端面曲面与侧面轮廓控件会自动禁用（网格本身已含形状）；<b>咬花 / 雾面依然生效</b>，因为它只改变表面光学属性、不改变几何。</div>
+
+<h3>5.5 LED 灯珠选型库</h3>
+<table>
+  <tr><th>参数</th><th>含义</th><th>设置建议</th></tr>
+  <tr><td><code>灯珠型号</code></td><td>封装库选择，光通量与发光面尺寸自动绑定</td><td>0402 / 0603 / 2835 / 3528 / 顶视 / 侧视</td></tr>
+  <tr><td><code>亮度档位</code></td><td>同一型号按驱动电流缩放</td><td>低亮（省电）/ 标准 / 高亮</td></tr>
+  <tr><td><code>X 偏移 / Y 偏移</code></td><td>灯珠相对入光面的装配偏心 (mm)</td><td>典型 ±0.1–0.3；<b>只移动灯珠，不动导光柱模型</b></td></tr>
+  <tr><td><code>启用 LED 灯珠</code></td><td>开启后光线从灯珠发光面发射，替代默认端面光源</td><td>做真实场景验证时开启</td></tr>
+  <tr><td><code>灯珠类型</code></td><td>矩形 / 正方形 / 圆柱半球型凹面 / 圆柱半球型凸面</td><td>凹面聚光、凸面改变发散</td></tr>
+  <tr><td><code>长 L / 宽 W / 高 H</code></td><td>发光面与本体尺寸 (mm)</td><td>选型号后自动带出，特殊封装可手改</td></tr>
+  <tr><td><code>凹面深度 / 凸面半径</code></td><td>曲面灯珠的条件参数</td><td>凹深 0.3–0.5；凸面 R0.5–1.0</td></tr>
+</table>
+<div class="tip"><b>偏移的含义</b>：X / Y 偏移模拟的是「LED 贴片位置偏差」或「装配公差」，沿入射面切线方向移动灯珠本身。导光柱模型的位置不会跟着动 —— 这就是实际装配中入光面接收不全、亮度下降的常见原因。</div>
+
+<h3>5.6 边界 &amp; 周边结构</h3>
+<table>
+  <tr><th>参数</th><th>含义</th></tr>
+  <tr><td><code>周边壳体</code></td><td>黑色塑胶（吸光）/ 白色塑胶（反射）—— 影响漏光与串光结论</td></tr>
+  <tr><td><code>泡棉遮光圈</code></td><td>勾选表示入光处增加防漏光泡棉</td></tr>
+  <tr><td><code>反光片 / 麦拉片</code></td><td>勾选表示出光侧有反射结构</td></tr>
+</table>
+
+<h3>5.7 仿真评估目标</h3>
+<p>勾选本次要判定的项目，结果页只输出对应结论，避免出现与本次评审无关的图表：</p>
+<p><code>亮度</code> · <code>均匀性</code> · <code>漏光</code> · <code>公差敏感度</code> · <code>折弯光损</code> · <code>串光</code> · <code>成型难易</code></p>
+
+<h2>六、仿真计算</h2>
+
+<h3>6.1 仿真模式</h3>
+<table>
+  <tr><th>模式</th><th>特点</th><th>适用场景</th></tr>
+  <tr><td><code>快速预览</code></td><td>秒级出光路，光斑为低样本平滑估计</td><td>前期方案迭代、看光往哪走</td></tr>
+  <tr><td><code>精确评估</code></td><td>定量评估，输出完整工程结论，耗时更长</td><td>定稿评审、出报告</td></tr>
+</table>
+<div class="warn">均匀度与达标判定请以「精确评估」结果为准；快速预览只用于看趋势。</div>
+
+<h3>6.2 端面设定</h3>
+<div class="card">
+  <p><b>自动检测</b>：点「自动检测端面」，软件按面积与朝向自动识别入射端与出射端。</p>
+  <p><b>手动拾取</b>：点「拾取→入射端」或「拾取→出射端」进入拾取模式：</p>
+  <table>
+    <tr><th>操作</th><th>效果</th></tr>
+    <tr><td>单击某个面</td><td>选中该面（自动扩展整个相连的平面 / 曲面区域），<b>替换</b>当前选择</td></tr>
+    <tr><td><b>Shift + 单击</b></td><td>在当前选择上<b>累加</b>新的面（用于复杂模型多面入射）</td></tr>
+    <tr><td>再次单击已选中的面</td><td><b>取消</b>该面的选择</td></tr>
+    <tr><td>拖拽旋转视角</td><td>不会误触发拾取（位移超过 5px 自动忽略）</td></tr>
+    <tr><td><b>Esc</b> 或再次点击拾取按钮</td><td>退出拾取模式</td></tr>
+  </table>
+  <p>平面与曲面（如穹顶、圆柱侧壁）在相切交界处会自动分割，尖锐边自动阻断，避免「点一个面带走一整片侧壁」。</p>
+</div>
+
+<h3>6.3 多灯珠</h3>
+<div class="card">
+  <p>点「+ 增加灯珠」可添加多颗灯珠，每颗灯珠<b>独立</b>选择入射面与出射面，已有参数保留不变。状态栏显示「灯珠×N」。</p>
+  <p>开启「启用 LED 灯珠」后，灯珠沿所选入射面法向自动定位在面前的间隙处，发射方向垂直入射面。</p>
+</div>
+
+<h3>6.4 公差扫参与运行</h3>
+<p>勾选「公差扫参」会额外自动运行 LED 偏移 0.1 / 0.2 / 0.3 mm 三组仿真，结果用于结果页的<b>公差-亮度衰减曲线</b>。点「开始计算」后界面显示进度，仿真在后台 Worker 中执行，不卡界面。</p>
+
+<h3>6.5 结果面板</h3>
+<table>
+  <tr><th>指标</th><th>含义</th></tr>
+  <tr><td>出射率</td><td>到达出射端的光线 / 总光线 —— 光能利用率</td></tr>
+  <tr><td>平均输出强度</td><td>出射端面平均照度（相对值）</td></tr>
+  <tr><td>侧面逃逸</td><td>从侧壁漏出的光线占比</td></tr>
+  <tr><td>介质吸收</td><td>被材料吸收的能量（Beer-Lambert）</td></tr>
+  <tr><td>反弹耗尽 / 残留</td><td>达到最大反弹次数仍未出射的剩余能量</td></tr>
+  <tr><td>耗时</td><td>本次仿真计算时间</td></tr>
+</table>
+<p>3D 视图可预览轨迹光线，并显示贴在出射端端面上的光斑预览。</p>
+
+<h2>七、结果分析</h2>
+<table>
+  <tr><th>指标 / 图表</th><th>含义</th></tr>
+  <tr><td><code>达标阈值</code></td><td>滑块设定 0.5–1.0；光强 ≥ 阈值 × 平均照度的区域判为「达标」</td></tr>
+  <tr><td><code>出射成功率</code></td><td>到达出射端的光线占比</td></tr>
+  <tr><td><code>均匀性</code></td><td>出射端 / 目标区域的照度均匀程度（越接近 1 越好）</td></tr>
+  <tr><td><code>出射热图</code></td><td>出射端面的能量分布俯视图，直观看到亮暗区</td></tr>
+  <tr><td><code>轴向分布</code></td><td>沿导光柱长度方向的侧壁出光分布</td></tr>
+  <tr><td><code>配光曲线</code></td><td>出射光的空间角度分布（极坐标）</td></tr>
+  <tr><td><code>能量账本</code></td><td>出射 / 侧面出光 / 吸收 / 残留的能量守恒分解，用于排查「光去哪了」</td></tr>
+  <tr><td><code>仿真 vs 实测</code></td><td>与项目内的实测记录对比（项目 JSON 中带 measurements 数据时显示）</td></tr>
+</table>
+
+<h2>八、出射端面光斑（结果分析页内）</h2>
+<div class="card">
+  <p>光斑视图已并入「结果分析」，不再单独占用顶部菜单。它复用「仿真计算」最近一次仿真的出射光线数据（同一批光线，无二次仿真偏差）。探测屏固定在导光柱出射端端面上（<code>d = 0</code>），网格固定 <b>64×64</b>，与 3D 截面预览、报告截图使用同一口径。</p>
+  <table>
+    <tr><th>功能</th><th>说明</th></tr>
+    <tr><td>显示模式</td><td>伪彩（彩虹环）/ 真彩合成 / 逐 λ 分离</td></tr>
+    <tr><td>光斑指标</td><td>端面均匀性、光斑达标面积、进光利用率、出射亮度</td></tr>
+    <tr><td>辅助曲线</td><td>径向分布曲线、辐照度统计直方图</td></tr>
+    <tr><td>导出</td><td>云图 PNG / 数据 JSON</td></tr>
+  </table>
+  <div class="tip">若模型、光源或材料在仿真后被修改，页面会提示「结果可能已过期」，请回到「仿真计算」重跑。</div>
+</div>
+
+<h2>九、项目与数据管理</h2>
+<div class="card">
+  <p>项目的全部管理入口集中在 <b>Home</b> 页：</p>
+  <table>
+    <tr><th>操作</th><th>说明</th></tr>
+    <tr><td>新建项目</td><td>Home 顶部「新建项目」，输入名称后创建并自动激活</td></tr>
+    <tr><td>打开 / 重命名 / 删除</td><td>卡片上的对应按钮；已被锁定的项目不可删除</td></tr>
+    <tr><td>导出项目</td><td>卡片「导出」导出单个项目；顶部「全部导出」打包所有项目</td></tr>
+    <tr><td>导入项目</td><td>顶部「导入文件」选择 <code>.json</code> 项目包，可还原或换机迁移</td></tr>
+  </table>
+  <p>数据全部保存在本机浏览器 localStorage（键名 <code>lgv.projects.v1</code>），关闭浏览器不丢失；清理浏览器数据会清空，请定期导出备份。</p>
+</div>
+
+<h2>十、报告生成</h2>
+<div class="card">
+  <p>在「报告生成」页勾选要纳入的仿真记录（可多选），选择是否包含 3D 截图与报告语言，点「生成报告」。报告为<b>自包含 HTML</b>：可「下载」存档或「打印 / PDF」直接输出，适合归档与邮件发送。右侧为实时预览。</p>
+</div>
+
+<h2>十一、选项设置（顶栏「选项」）</h2>
+<div class="card">
+  <table>
+    <tr><th>设置</th><th>说明</th></tr>
+    <tr><td>模型配置显示项</td><td>勾选 = 在「模型配置」页显示该卡片（文件导入 / 材料选型 / 表面处理与曲面 / LED 灯珠选型库 / 边界 &amp; 周边结构 / 仿真评估目标）；取消勾选 = 隐藏。数据仍保留，只是界面收纳。</td></tr>
+    <tr><td>显示参数帮助图标 (?)</td><td>开启后每个参数标签旁出现 ?，悬停查看含义与建议值；关闭可让界面更紧凑。</td></tr>
+    <tr><td>打开软件使用说明</td><td>在新标签页打开本文档；文档亦可直接双击 <code>docs/user-guide.html</code> 打开。</td></tr>
+  </table>
+  <p>以上偏好保存在本机浏览器中，刷新后仍生效。</p>
+</div>
+
+<h2>十二、常见问题 FAQ</h2>
+<details><summary>参数化建模（圆柱 / 锥台输入参数生成）去哪了？</summary>
+  <p>已移除。本工具现在的几何统一来自导入的三维模型，目的是让仿真对象与结构实际设计<b>完全一致</b>，避免「参数化近似」与真实模型之间的偏差。请用 CAD 导出 STL / STEP 后导入。</p>
+</details>
+<details><summary>侧棱镜微齿（SPEOS 式）选项在哪？</summary>
+  <p>已移除。侧壁的齿纹 / 微结构请直接建在三维模型里，导入后按真实几何参与光线追踪；表面粗糙程度则用「表面处理与曲面 → 咬花 / 雾面」控制。</p>
+</details>
+<details><summary>导入的模型刷新页面后不见了？</summary>
+  <p>浏览器安全策略限制网页直接读取本地文件缓存，文件模型刷新后需重新导入；项目参数与仿真记录不受影响（存于 localStorage）。建议在一次会话内完成仿真与出图。</p>
+</details>
+<details><summary>X / Y 偏移会不会把导光柱模型也移动？</summary>
+  <p>不会。X / Y 偏移只移动 LED 灯珠本身（沿入射面切线方向），导光柱模型保持原位。这正是模拟「贴片偏位 / 装配公差」的方式。</p>
+</details>
+<details><summary>光线大量在内部反射，出光很少？</summary>
+  <p>按顺序检查：① 材料折射率是否合理（n 越大越「锁光」，PMMA≈1.49）；② 出射端面是否选对；③ 侧面咬花等级是否过低（镜面侧壁会全反射）；④ 查看能量账本，确认能量停在「残留」还是被「吸收」；⑤ 检查 LED 是否与入光面对准（装配间隙与 X / Y 偏移）。</p>
+</details>
+<details><summary>为什么手动拾取入射面后灯珠没有对准？</summary>
+  <p>启用「启用 LED 灯珠」后，灯珠会自动定位在所选入射面法向的间隙处。若未对准，确认已重新导入 / 更新模型，并重新选择端面触发刷新。</p>
+</details>
+<details><summary>想要多个入射面、多颗灯珠怎么操作？</summary>
+  <p>在「仿真计算」点「+ 增加灯珠」，每颗灯珠独立拾取入射面与出射面。同一颗灯珠内可用 <b>Shift+点击</b> 累加多个面。</p>
+</details>
+<details><summary>仿真很慢？</summary>
+  <p>先用「快速预览」迭代方案；需要定量时再切「精确评估」。仿真在后台 Worker 中执行，界面不卡顿。</p>
+</details>
+<details><summary>数据保存在哪里？如何换电脑？</summary>
+  <p>全部数据保存在本机浏览器 localStorage；用 Home 页的「全部导出」备份，「导入文件」还原。请勿使用无痕模式。</p>
+</details>
+
+<h2>十三、操作技巧速查</h2>
+<table>
+  <tr><th>操作</th><th>说明</th></tr>
+  <tr><td>单击零件</td><td>选中并激活移动 / 旋转 / 放置工具条</td></tr>
+  <tr><td>拖动彩色圆环</td><td>绕轴旋转，45° 吸附</td></tr>
+  <tr><td>放置模式</td><td>点透明面 → 点盘面，贴合放置</td></tr>
+  <tr><td>Shift + 点击面</td><td>累加选择多个面</td></tr>
+  <tr><td>再次点击已选面</td><td>取消该面选择</td></tr>
+  <tr><td>Esc</td><td>退出拾取模式 / 关闭选项弹窗</td></tr>
+  <tr><td>鼠标拖拽</td><td>旋转 3D 视角（拾取模式下不触发选面）</td></tr>
+  <tr><td>滚轮</td><td>缩放 3D 视图</td></tr>
+  <tr><td>参数 ? 图标</td><td>悬停查看参数含义与建议（顶栏「选项」可开关）</td></tr>
+  <tr><td>卡片标题</td><td>点击折叠 / 展开；「一键展开全部参数」按钮批量操作</td></tr>
+</table>
+
+<footer>导光柱光迹模拟工具 · 软件使用说明 · 本文档可打印或另存为 PDF 归档</footer>
+</div>
+</body>
+</html>
